@@ -2,60 +2,32 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>Reaction Screen</title>
+  <title>MOSW Screen</title>
   <style>
-    html, body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #000;
-      font-family: system-ui, sans-serif;
-    }
-
+    html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#000; }
     #screen {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-      background: linear-gradient(135deg, #111, #222);
+      position:relative; width:100vw; height:100vh;
+      background:linear-gradient(135deg,#111,#222);
     }
-
-    .line-v, .line-h {
-      position: absolute;
-      background: rgba(255,255,255,0.25);
+    .line-v, .line-h { position:absolute; background:rgba(255,255,255,0.25); }
+    .line-v { left:50%; top:0; width:2px; height:100%; }
+    .line-h { top:50%; left:0; width:100%; height:2px; }
+    .label {
+      position:absolute; color:rgba(255,255,255,.35); font:24px system-ui;
     }
-    .line-v {
-      left: 50%;
-      top: 0;
-      width: 2px;
-      height: 100%;
-    }
-    .line-h {
-      top: 50%;
-      left: 0;
-      height: 2px;
-      width: 100%;
-    }
-
+    .nw { left:20px; top:20px; }
+    .ne { right:20px; top:20px; }
+    .sw { left:20px; bottom:20px; }
+    .se { right:20px; bottom:20px; }
     .emoji {
-      position: absolute;
-      font-size: 72px;
-      animation: floatUp 3s ease-out forwards;
-      pointer-events: none;
+      position:absolute; font-size:80px; pointer-events:none;
+      animation:floatUp 3s ease-out forwards;
+      text-shadow:0 0 20px rgba(255,255,255,.6);
     }
-
     @keyframes floatUp {
-      0% {
-        transform: translateY(40px) scale(0.7);
-        opacity: 0;
-      }
-      20% {
-        opacity: 1;
-      }
-      100% {
-        transform: translateY(-160px) scale(1.5);
-        opacity: 0;
-      }
+      0% { transform:translateY(40px) scale(.7); opacity:0; }
+      20% { opacity:1; }
+      100% { transform:translateY(-160px) scale(1.6); opacity:0; }
     }
   </style>
 </head>
@@ -63,12 +35,17 @@
   <div id="screen">
     <div class="line-v"></div>
     <div class="line-h"></div>
+    <div class="label nw">左上</div>
+    <div class="label ne">右上</div>
+    <div class="label sw">左下</div>
+    <div class="label se">右下</div>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getDatabase, ref, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
+    // ★index.htmlと完全に同じFirebase設定を入れる
     const firebaseConfig = {
       apiKey: "YOUR_API_KEY",
       authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -81,25 +58,25 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-
     const screen = document.getElementById("screen");
 
     function randomPositionInQuadrant(q) {
       const w = window.innerWidth;
       const h = window.innerHeight;
+      const margin = 100;
 
       const ranges = {
-        NW: { xMin: 0,     xMax: w / 2, yMin: 0,     yMax: h / 2 },
-        NE: { xMin: w / 2, xMax: w,     yMin: 0,     yMax: h / 2 },
-        SW: { xMin: 0,     xMax: w / 2, yMin: h / 2, yMax: h },
-        SE: { xMin: w / 2, xMax: w,     yMin: h / 2, yMax: h }
+        NW: { xMin: 0,     xMax: w/2, yMin: 0,     yMax: h/2 },
+        NE: { xMin: w/2,  xMax: w,   yMin: 0,     yMax: h/2 },
+        SW: { xMin: 0,     xMax: w/2, yMin: h/2,  yMax: h },
+        SE: { xMin: w/2,  xMax: w,   yMin: h/2,  yMax: h }
       };
 
       const r = ranges[q] || ranges.NW;
 
       return {
-        x: r.xMin + Math.random() * (r.xMax - r.xMin - 100),
-        y: r.yMin + Math.random() * (r.yMax - r.yMin - 100)
+        x: r.xMin + margin/2 + Math.random() * Math.max(1, r.xMax - r.xMin - margin),
+        y: r.yMin + margin/2 + Math.random() * Math.max(1, r.yMax - r.yMin - margin)
       };
     }
 
@@ -113,16 +90,12 @@
       el.style.top = `${pos.y}px`;
 
       screen.appendChild(el);
-
-      setTimeout(() => {
-        el.remove();
-      }, 3000);
+      setTimeout(() => el.remove(), 3000);
     }
 
     onChildAdded(ref(db, "reactions"), snapshot => {
       const data = snapshot.val();
       if (!data || !data.emoji || !data.quadrant) return;
-
       showEmoji(data.emoji, data.quadrant);
     });
   </script>
