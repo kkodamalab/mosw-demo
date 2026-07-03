@@ -13,11 +13,21 @@
     }
     .quad { font-size: 22px; }
     .selected { border-color:white; background:#555; }
-    .send {
+    .send, .done {
       margin-top: 24px; font-size: 22px; padding: 14px 32px;
-      border-radius: 12px; border:none; background:#ff4081; color:white;
+      border-radius: 12px; border:none; color:white;
     }
-    #status { margin-top:18px; color:#ccc; }
+    .send { background:#ff4081; }
+    .done { background:#00c853; display:none; }
+    #status { margin-top:18px; color:#ccc; min-height: 1.5em; }
+    #sentBox {
+      display:none;
+      margin-top: 28px;
+      padding: 20px;
+      border: 2px solid #00c853;
+      border-radius: 16px;
+      background: #18251d;
+    }
   </style>
 </head>
 <body>
@@ -36,13 +46,19 @@
 
   <br>
   <button class="send" id="sendBtn">送信</button>
+
   <div id="status">絵文字と位置を選んでください</div>
+
+  <div id="sentBox">
+    <h2 id="sentMessage">送信完了</h2>
+    <button class="done" id="doneBtn">完了</button>
+  </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getDatabase, ref, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-    // ★ここだけFirebase Consoleの値に置き換える
+    // ★ここをFirebase Consoleの値に置き換える
     const firebaseConfig = {
       apiKey: "YOUR_API_KEY",
       authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -59,11 +75,18 @@
     let selectedEmoji = null;
     let selectedQuad = null;
 
+    const status = document.getElementById("status");
+    const sendBtn = document.getElementById("sendBtn");
+    const doneBtn = document.getElementById("doneBtn");
+    const sentBox = document.getElementById("sentBox");
+    const sentMessage = document.getElementById("sentMessage");
+
     document.querySelectorAll(".emoji").forEach(btn => {
       btn.addEventListener("click", () => {
         document.querySelectorAll(".emoji").forEach(b => b.classList.remove("selected"));
         btn.classList.add("selected");
         selectedEmoji = btn.dataset.emoji;
+        status.textContent = "位置も選んで送信してください";
       });
     });
 
@@ -72,14 +95,19 @@
         document.querySelectorAll(".quad").forEach(b => b.classList.remove("selected"));
         btn.classList.add("selected");
         selectedQuad = btn.dataset.quad;
+        status.textContent = "絵文字と位置を確認して送信してください";
       });
     });
 
-    document.getElementById("sendBtn").addEventListener("click", async () => {
+    sendBtn.addEventListener("click", async () => {
       if (!selectedEmoji || !selectedQuad) {
-        document.getElementById("status").textContent = "絵文字と位置を両方選んでください";
+        status.textContent = "絵文字と位置を両方選んでください";
         return;
       }
+
+      sendBtn.disabled = true;
+      sendBtn.textContent = "送信中...";
+      status.textContent = "送信中です";
 
       try {
         await push(ref(db, "reactions"), {
@@ -87,11 +115,33 @@
           quadrant: selectedQuad,
           createdAt: serverTimestamp()
         });
-        document.getElementById("status").textContent = `${selectedEmoji} を送信しました`;
+
+        status.textContent = "";
+        sentMessage.textContent = `${selectedEmoji} を送信しました`;
+        sentBox.style.display = "block";
+        doneBtn.style.display = "inline-block";
+        sendBtn.style.display = "none";
+
       } catch (e) {
         console.error(e);
-        document.getElementById("status").textContent = "送信エラー：Firebase設定を確認してください";
+        status.textContent = "送信エラー：Firebase設定またはRulesを確認してください";
+        sendBtn.disabled = false;
+        sendBtn.textContent = "送信";
       }
+    });
+
+    doneBtn.addEventListener("click", () => {
+      selectedEmoji = null;
+      selectedQuad = null;
+
+      document.querySelectorAll(".emoji, .quad").forEach(b => b.classList.remove("selected"));
+
+      sentBox.style.display = "none";
+      doneBtn.style.display = "none";
+      sendBtn.style.display = "inline-block";
+      sendBtn.disabled = false;
+      sendBtn.textContent = "送信";
+      status.textContent = "絵文字と位置を選んでください";
     });
   </script>
 </body>
