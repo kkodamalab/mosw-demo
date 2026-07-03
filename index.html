@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emoji Reaction</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      text-align: center;
+      padding: 24px;
+      background: #111;
+      color: white;
+    }
+    .emoji, .quad {
+      font-size: 40px;
+      margin: 8px;
+      padding: 14px 18px;
+      border-radius: 14px;
+      border: 2px solid #555;
+      background: #222;
+      color: white;
+    }
+    .selected {
+      border-color: #fff;
+      background: #444;
+    }
+    button.send {
+      margin-top: 24px;
+      font-size: 22px;
+      padding: 14px 28px;
+      border-radius: 12px;
+      border: none;
+      background: #ff4081;
+      color: white;
+    }
+    #status {
+      margin-top: 18px;
+      color: #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1>リアクション送信</h1>
+
+  <h2>絵文字を選ぶ</h2>
+  <button class="emoji" data-emoji="☺️">☺️</button>
+  <button class="emoji" data-emoji="💗">💗</button>
+  <button class="emoji" data-emoji="👍">👍</button>
+
+  <h2>表示位置を選ぶ</h2>
+  <button class="quad" data-quad="NW">左上</button>
+  <button class="quad" data-quad="NE">右上</button>
+  <button class="quad" data-quad="SW">左下</button>
+  <button class="quad" data-quad="SE">右下</button>
+
+  <br />
+  <button class="send" id="sendBtn">送信</button>
+
+  <div id="status">絵文字と位置を選んでください</div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let selectedEmoji = null;
+    let selectedQuad = null;
+
+    document.querySelectorAll(".emoji").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".emoji").forEach(b => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        selectedEmoji = btn.dataset.emoji;
+      });
+    });
+
+    document.querySelectorAll(".quad").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".quad").forEach(b => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        selectedQuad = btn.dataset.quad;
+      });
+    });
+
+    document.getElementById("sendBtn").addEventListener("click", async () => {
+      if (!selectedEmoji || !selectedQuad) {
+        document.getElementById("status").textContent = "絵文字と位置を両方選んでください";
+        return;
+      }
+
+      await push(ref(db, "reactions"), {
+        emoji: selectedEmoji,
+        quadrant: selectedQuad,
+        createdAt: serverTimestamp()
+      });
+
+      document.getElementById("status").textContent = `${selectedEmoji} を送信しました`;
+    });
+  </script>
+</body>
+</html>
