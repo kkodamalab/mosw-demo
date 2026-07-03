@@ -21,12 +21,8 @@
     .done { background:#00c853; display:none; }
     #status { margin-top:18px; color:#ccc; min-height: 1.5em; }
     #sentBox {
-      display:none;
-      margin-top: 28px;
-      padding: 20px;
-      border: 2px solid #00c853;
-      border-radius: 16px;
-      background: #18251d;
+      display:none; margin-top: 28px; padding: 20px;
+      border: 2px solid #00c853; border-radius: 16px; background: #18251d;
     }
   </style>
 </head>
@@ -58,16 +54,15 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getDatabase, ref, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-    // ★ここをFirebase Consoleの値に置き換える
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
-    };
+const firebaseConfig = {
+  apiKey: "AIzaSyAaqSeyjtG7Y0CbhAITOjjP5lvAAbk2-k",
+  authDomain: "mosw-f855e.firebaseapp.com",
+  databaseURL: "https://mosw-f855e-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "mosw-f855e",
+  storageBucket: "mosw-f855e.firebasestorage.app",
+  messagingSenderId: "1093592474312",
+  appId: "1:1093592474312:web:76370050415013cf9bbbfd"
+};
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
@@ -107,14 +102,23 @@
 
       sendBtn.disabled = true;
       sendBtn.textContent = "送信中...";
-      status.textContent = "送信中です";
+      status.textContent = "Firebaseへ送信中です";
+
+      const payload = {
+        emoji: selectedEmoji,
+        quadrant: selectedQuad,
+        createdAt: serverTimestamp()
+      };
 
       try {
-        await push(ref(db, "reactions"), {
-          emoji: selectedEmoji,
-          quadrant: selectedQuad,
-          createdAt: serverTimestamp()
+        console.log("送信データ:", payload);
+
+        const sendPromise = push(ref(db, "reactions"), payload);
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("送信タイムアウト：Firebaseに接続できていません")), 8000);
         });
+
+        await Promise.race([sendPromise, timeoutPromise]);
 
         status.textContent = "";
         sentMessage.textContent = `${selectedEmoji} を送信しました`;
@@ -123,8 +127,8 @@
         sendBtn.style.display = "none";
 
       } catch (e) {
-        console.error(e);
-        status.textContent = "送信エラー：Firebase設定またはRulesを確認してください";
+        console.error("送信エラー:", e);
+        status.textContent = `送信エラー：${e.message}`;
         sendBtn.disabled = false;
         sendBtn.textContent = "送信";
       }
