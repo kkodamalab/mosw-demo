@@ -45,16 +45,15 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getDatabase, ref, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-    // ★index.htmlと完全に同じFirebase設定を入れる
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
-    };
+const firebaseConfig = {
+  apiKey: "AIzaSyAaqSeyjtG7Y0CbhAITOjjP5lvAAbk2-k",
+  authDomain: "mosw-f855e.firebaseapp.com",
+  databaseURL: "https://mosw-f855e-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "mosw-f855e",
+  storageBucket: "mosw-f855e.firebasestorage.app",
+  messagingSenderId: "1093592474312",
+  appId: "1:1093592474312:web:76370050415013cf9bbbfd"
+};
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
