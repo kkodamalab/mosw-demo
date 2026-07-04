@@ -2,61 +2,157 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>MOSW Reaction</title>
   <style>
-    body { font-family: system-ui, sans-serif; text-align: center; padding: 20px; background:#111; color:white; }
-    button { cursor:pointer; }
-    .emoji {
-      font-size: 34px; margin: 6px; padding: 12px 16px;
-      border-radius: 14px; border: 2px solid #555; background:#222; color:white;
+    html, body {
+      margin: 0;
+      width: 100%;
+      min-height: 100%;
+      background: #111;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      overscroll-behavior: none;
+      touch-action: manipulation;
     }
-    .selected { border-color:white; background:#555; }
-    #stage {
-      width: 90vw; max-width: 520px; aspect-ratio: 16 / 9;
-      margin: 18px auto; border: 2px solid #aaa; position: relative;
-      background: linear-gradient(135deg,#222,#333); touch-action: none;
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 24px 12px;
+      box-sizing: border-box;
     }
-    .grid-v, .grid-h { position:absolute; background:rgba(255,255,255,.25); }
-    .grid-v { top:0; bottom:0; width:1px; }
-    .grid-h { left:0; right:0; height:1px; }
-    #marker {
-      position:absolute; transform: translate(-50%, -50%);
-      font-size: 34px; display:none; pointer-events:none;
+
+    #app {
+      width: 100%;
+      max-width: 640px;
     }
-    .send, .done {
-      margin-top: 18px; font-size: 22px; padding: 14px 32px;
-      border-radius: 12px; border:none; color:white;
+
+    #emojiPalette {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+      margin-bottom: 22px;
     }
-    .send { background:#ff4081; }
-    .done { background:#00c853; display:none; }
-    #status { margin-top:18px; color:#ccc; min-height:1.5em; }
-    #sentBox {
-      display:none; margin-top: 24px; padding: 18px;
-      border: 2px solid #00c853; border-radius: 16px; background:#18251d;
+
+    .emojiBtn {
+      height: 62px;
+      border: 2px solid rgba(255,255,255,.25);
+      border-radius: 14px;
+      background: #222;
+      color: #fff;
+      font-size: 30px;
+      cursor: pointer;
+      transition: transform .08s ease, background .08s ease, border-color .08s ease;
+    }
+
+    .emojiBtn:active {
+      transform: scale(.94);
+    }
+
+    .emojiBtn.selected {
+      background: #555;
+      border-color: #fff;
+    }
+
+    #positionArea {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border: 2px solid rgba(255,255,255,.75);
+      background:
+        linear-gradient(rgba(255,255,255,.16) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.16) 1px, transparent 1px),
+        linear-gradient(135deg, #202020, #303030);
+      background-size: 20% 33.333%, 20% 33.333%, auto;
+      overflow: hidden;
+      box-sizing: border-box;
+      margin-bottom: 18px;
+    }
+
+    .placedEmoji {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      font-size: 30px;
+      pointer-events: none;
+      text-shadow: 0 0 12px rgba(255,255,255,.65);
+      animation: pop .12s ease-out;
+    }
+
+    @keyframes pop {
+      from { transform: translate(-50%, -50%) scale(.5); opacity: .4; }
+      to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+
+    #status {
+      min-height: 28px;
+      text-align: center;
+      font-size: 16px;
+      color: #00e676;
+      margin-bottom: 12px;
+    }
+
+    #sendBtn {
+      width: 100%;
+      height: 64px;
+      border: none;
+      border-radius: 16px;
+      background: #00c853;
+      color: #fff;
+      font-size: 24px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    #sendBtn:active {
+      transform: scale(.98);
+    }
+
+    #sendBtn:disabled {
+      background: #444;
+      color: #aaa;
+      cursor: default;
+    }
+
+    #clearBtn {
+      width: 100%;
+      height: 44px;
+      margin-top: 10px;
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 12px;
+      background: transparent;
+      color: rgba(255,255,255,.75);
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #counter {
+      text-align: center;
+      color: rgba(255,255,255,.72);
+      font-size: 14px;
+      margin: 8px 0 14px;
     }
   </style>
 </head>
 <body>
-  <h1>リアクション送信</h1>
+  <div id="app">
+    <div id="emojiPalette">
+      <button class="emojiBtn selected" data-emoji="☺️">☺️</button>
+      <button class="emojiBtn" data-emoji="💗">💗</button>
+      <button class="emojiBtn" data-emoji="👍">👍</button>
+      <button class="emojiBtn" data-emoji="⭐">⭐</button>
+      <button class="emojiBtn" data-emoji="🙌">🙌</button>
+      <button class="emojiBtn" data-emoji="🍻">🍻</button>
+    </div>
 
-  <h2>絵文字</h2>
-  <button class="emoji" data-emoji="☺️">☺️</button>
-  <button class="emoji" data-emoji="💗">💗</button>
-  <button class="emoji" data-emoji="👍">👍</button>
-  <button class="emoji" data-emoji="⭐">⭐</button>
-  <button class="emoji" data-emoji="🙌">🙌</button>
-  <button class="emoji" data-emoji="🍻">🍻</button>
+    <div id="positionArea"></div>
 
-  <h2>表示したい場所をタッチ</h2>
-  <div id="stage"><div id="marker"></div></div>
+    <div id="counter">0 / 15</div>
+    <div id="status"></div>
 
-  <button class="send" id="sendBtn">送信</button>
-  <div id="status">絵文字と表示位置を選んでください</div>
-
-  <div id="sentBox">
-    <h2 id="sentMessage">送信完了</h2>
-    <button class="done" id="doneBtn">完了</button>
+    <button id="sendBtn" disabled>送信</button>
+    <button id="clearBtn">クリア</button>
   </div>
 
   <script type="module">
@@ -76,100 +172,108 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    let selectedEmoji = null, selectedX = null, selectedY = null;
-
-    const stage = document.getElementById("stage");
-    const marker = document.getElementById("marker");
-    const status = document.getElementById("status");
+    const emojiButtons = document.querySelectorAll(".emojiBtn");
+    const positionArea = document.getElementById("positionArea");
     const sendBtn = document.getElementById("sendBtn");
-    const doneBtn = document.getElementById("doneBtn");
-    const sentBox = document.getElementById("sentBox");
-    const sentMessage = document.getElementById("sentMessage");
+    const clearBtn = document.getElementById("clearBtn");
+    const counter = document.getElementById("counter");
+    const status = document.getElementById("status");
 
-    for (let i = 1; i < 5; i++) {
-      const v = document.createElement("div");
-      v.className = "grid-v";
-      v.style.left = `${i * 20}%`;
-      stage.appendChild(v);
-    }
-    for (let i = 1; i < 3; i++) {
-      const h = document.createElement("div");
-      h.className = "grid-h";
-      h.style.top = `${i * 33.333}%`;
-      stage.appendChild(h);
-    }
+    const MAX_REACTIONS = 15;
+    let selectedEmoji = "☺️";
+    let reactions = [];
 
-    document.querySelectorAll(".emoji").forEach(btn => {
+    emojiButtons.forEach(btn => {
       btn.addEventListener("click", () => {
-        document.querySelectorAll(".emoji").forEach(b => b.classList.remove("selected"));
+        emojiButtons.forEach(b => b.classList.remove("selected"));
         btn.classList.add("selected");
         selectedEmoji = btn.dataset.emoji;
-        marker.textContent = selectedEmoji;
-        if (selectedX !== null) marker.style.display = "block";
       });
     });
 
-    stage.addEventListener("pointerdown", e => {
-      const rect = stage.getBoundingClientRect();
-      const x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-      const y = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
-
-      const col = Math.min(4, Math.floor(x * 5));
-      const row = Math.min(2, Math.floor(y * 3));
-
-      selectedX = (col + 0.5) / 5;
-      selectedY = (row + 0.5) / 3;
-
-      marker.style.left = `${selectedX * 100}%`;
-      marker.style.top = `${selectedY * 100}%`;
-      marker.textContent = selectedEmoji || "📍";
-      marker.style.display = "block";
-      status.textContent = "絵文字と位置を確認して送信してください";
-    });
-
-    sendBtn.addEventListener("click", async () => {
-      if (!selectedEmoji || selectedX === null || selectedY === null) {
-        status.textContent = "絵文字と表示位置を選んでください";
+    positionArea.addEventListener("pointerdown", e => {
+      if (reactions.length >= MAX_REACTIONS) {
+        status.textContent = "最大15個まで選択できます";
         return;
       }
 
+      const rect = positionArea.getBoundingClientRect();
+      const rawX = (e.clientX - rect.left) / rect.width;
+      const rawY = (e.clientY - rect.top) / rect.height;
+
+      const col = Math.floor(rawX * 5);
+      const row = Math.floor(rawY * 3);
+
+      const x = (col + 0.5) / 5;
+      const y = (row + 0.5) / 3;
+
+      const reaction = {
+        emoji: selectedEmoji,
+        x,
+        y
+      };
+
+      reactions.push(reaction);
+      drawPlacedEmoji(reaction);
+      updateUI();
+    });
+
+    function drawPlacedEmoji(reaction) {
+      const el = document.createElement("div");
+      el.className = "placedEmoji";
+      el.textContent = reaction.emoji;
+      el.style.left = `${reaction.x * 100}%`;
+      el.style.top = `${reaction.y * 100}%`;
+      positionArea.appendChild(el);
+    }
+
+    function updateUI() {
+      counter.textContent = `${reactions.length} / ${MAX_REACTIONS}`;
+      sendBtn.disabled = reactions.length === 0;
+    }
+
+    function clearReactions() {
+      reactions = [];
+      positionArea.querySelectorAll(".placedEmoji").forEach(el => el.remove());
+      status.textContent = "";
+      updateUI();
+    }
+
+    clearBtn.addEventListener("click", clearReactions);
+
+    sendBtn.addEventListener("click", async () => {
+      if (reactions.length === 0) return;
+
       sendBtn.disabled = true;
-      sendBtn.textContent = "送信中...";
+      status.textContent = "送信中...";
 
       try {
-        await push(ref(db, "reactions"), {
-          emoji: selectedEmoji,
-          x: selectedX,
-          y: selectedY,
-          createdAt: serverTimestamp()
-        });
+        const reactionsRef = ref(db, "reactions");
 
-        sentMessage.textContent = `${selectedEmoji} を送信しました`;
-        sentBox.style.display = "block";
-        doneBtn.style.display = "inline-block";
-        sendBtn.style.display = "none";
-        status.textContent = "";
+        for (const reaction of reactions) {
+          await push(reactionsRef, {
+            emoji: reaction.emoji,
+            x: reaction.x,
+            y: reaction.y,
+            timestamp: serverTimestamp()
+          });
+        }
+
+        const sentCount = reactions.length;
+        clearReactions();
+        status.textContent = `${sentCount}個送信しました`;
+
+        setTimeout(() => {
+          status.textContent = "";
+        }, 1200);
 
       } catch (e) {
-        status.textContent = `送信エラー：${e.message}`;
-        sendBtn.disabled = false;
-        sendBtn.textContent = "送信";
+        status.textContent = "送信エラー: " + e.message;
+        updateUI();
       }
     });
 
-    doneBtn.addEventListener("click", () => {
-      selectedEmoji = null;
-      selectedX = null;
-      selectedY = null;
-      document.querySelectorAll(".emoji").forEach(b => b.classList.remove("selected"));
-      marker.style.display = "none";
-      sentBox.style.display = "none";
-      doneBtn.style.display = "none";
-      sendBtn.style.display = "inline-block";
-      sendBtn.disabled = false;
-      sendBtn.textContent = "送信";
-      status.textContent = "絵文字と表示位置を選んでください";
-    });
+    updateUI();
   </script>
 </body>
 </html>
