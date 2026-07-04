@@ -1,150 +1,32 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8" />
-  <title>MOSW Screen</title>
-  <style>
-    html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#000; }
-    #screen {
-      position:relative; width:100vw; height:100vh;
-      background:linear-gradient(135deg,#111,#222);
-    }
-    .line-v, .line-h { position:absolute; background:rgba(255,255,255,0.25); }
-    .line-v { left:50%; top:0; width:2px; height:100%; }
-    .line-h { top:50%; left:0; width:100%; height:2px; }
-    .label { position:absolute; color:rgba(255,255,255,.35); font:24px system-ui; }
-    .nw { left:20px; top:20px; }
-    .ne { right:20px; top:20px; }
-    .sw { left:20px; bottom:20px; }
-    .se { right:20px; bottom:20px; }
+function showEmoji(emoji, x, y) {
+  const el = document.createElement("div");
+  el.className = "emoji";
+  el.textContent = emoji;
 
-    .emoji {
-      position:absolute;
-      font-size:80px;
-      pointer-events:none;
-      animation:floatUp 3s ease-out forwards;
-      text-shadow:0 0 20px rgba(255,255,255,.6);
-      z-index: 10;
-    }
+  const w = window.innerWidth;
+  const h = window.innerHeight;
 
-    #debug {
-      position: fixed;
-      left: 10px;
-      top: 10px;
-      z-index: 9999;
-      color: #0f0;
-      background: rgba(0,0,0,.75);
-      font: 16px monospace;
-      padding: 10px;
-      white-space: pre-wrap;
-      max-width: 70vw;
-    }
+  el.style.left = `${x * w}px`;
+  el.style.top = `${y * h}px`;
 
-    @keyframes floatUp {
-      0% { transform:translateY(40px) scale(.7); opacity:0; }
-      20% { opacity:1; }
-      100% { transform:translateY(-160px) scale(1.6); opacity:0; }
-    }
-  </style>
-</head>
-<body>
-  <div id="screen">
-    <div class="line-v"></div>
-    <div class="line-h"></div>
-    <div class="label nw">左上</div>
-    <div class="label ne">右上</div>
-    <div class="label sw">左下</div>
-    <div class="label se">右下</div>
-  </div>
+  screen.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
 
-  <div id="debug">起動中...</div>
+onChildAdded(ref(db, "reactions"), snapshot => {
+  const data = snapshot.val();
+  if (!data || !data.emoji) return;
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, onChildAdded, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-
-    const debug = document.getElementById("debug");
-
-    function log(msg) {
-      console.log(msg);
-      debug.textContent = msg;
-    }
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyAaqSeyjtG7Y0CbhAITOjjP5lvAAbk2-k",
-      authDomain: "mosw-f855e.firebaseapp.com",
-      databaseURL: "https://mosw-f855e-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "mosw-f855e",
-      storageBucket: "mosw-f855e.firebasestorage.app",
-      messagingSenderId: "1093592474312",
-      appId: "1:1093592474312:web:76370050415013cf9bbbfd"
+  if (typeof data.x === "number" && typeof data.y === "number") {
+    showEmoji(data.emoji, data.x, data.y);
+  } else if (data.quadrant) {
+    const fallback = {
+      NW: [0.25, 0.25],
+      NE: [0.75, 0.25],
+      SW: [0.25, 0.75],
+      SE: [0.75, 0.75]
     };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const screen = document.getElementById("screen");
-
-    log("Firebase初期化OK。reactionsを確認中...");
-
-    function randomPositionInQuadrant(q) {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      const margin = 100;
-
-      const ranges = {
-        NW: { xMin: 0,    xMax: w/2, yMin: 0,    yMax: h/2 },
-        NE: { xMin: w/2, xMax: w,   yMin: 0,    yMax: h/2 },
-        SW: { xMin: 0,    xMax: w/2, yMin: h/2, yMax: h },
-        SE: { xMin: w/2, xMax: w,   yMin: h/2, yMax: h }
-      };
-
-      const r = ranges[q] || ranges.NW;
-
-      return {
-        x: r.xMin + margin/2 + Math.random() * Math.max(1, r.xMax - r.xMin - margin),
-        y: r.yMin + margin/2 + Math.random() * Math.max(1, r.yMax - r.yMin - margin)
-      };
-    }
-
-    function showEmoji(emoji, quadrant) {
-      const el = document.createElement("div");
-      el.className = "emoji";
-      el.textContent = emoji;
-
-      const pos = randomPositionInQuadrant(quadrant);
-      el.style.left = `${pos.x}px`;
-      el.style.top = `${pos.y}px`;
-
-      screen.appendChild(el);
-      setTimeout(() => el.remove(), 3000);
-    }
-
-    try {
-      const reactionsRef = ref(db, "reactions");
-
-      const snapshot = await get(reactionsRef);
-      if (snapshot.exists()) {
-        log("既存データあり。新規送信を待機中...");
-      } else {
-        log("reactionsは空。スマホから送信してください。");
-      }
-
-      onChildAdded(reactionsRef, snapshot => {
-        const data = snapshot.val();
-        log("受信: " + JSON.stringify(data));
-
-        if (!data || !data.emoji || !data.quadrant) {
-          log("受信したが形式不正: " + JSON.stringify(data));
-          return;
-        }
-
-        showEmoji(data.emoji, data.quadrant);
-      });
-
-    } catch (e) {
-      log("Firebase読取エラー: " + e.message);
-      console.error(e);
-    }
-  </script>
-</body>
-</html>
+    const [x, y] = fallback[data.quadrant] || [0.5, 0.5];
+    showEmoji(data.emoji, x, y);
+  }
+});
