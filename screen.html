@@ -1,32 +1,273 @@
-function showEmoji(emoji, x, y) {
-  const el = document.createElement("div");
-  el.className = "emoji";
-  el.textContent = emoji;
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>MOSW Screen</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: system-ui, sans-serif;
+    }
 
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+    #screen {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: linear-gradient(135deg, #111, #222);
+    }
 
-  el.style.left = `${x * w}px`;
-  el.style.top = `${y * h}px`;
+    #cameraVideo {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+      z-index: 0;
+      transform: scaleX(-1);
+    }
 
-  screen.appendChild(el);
-  setTimeout(() => el.remove(), 3000);
-}
+    #darkBackground {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, #111, #222);
+      z-index: 1;
+    }
 
-onChildAdded(ref(db, "reactions"), snapshot => {
-  const data = snapshot.val();
-  if (!data || !data.emoji) return;
+    .line-v, .line-h {
+      position: absolute;
+      background: rgba(255,255,255,0.25);
+      z-index: 3;
+    }
 
-  if (typeof data.x === "number" && typeof data.y === "number") {
-    showEmoji(data.emoji, data.x, data.y);
-  } else if (data.quadrant) {
-    const fallback = {
-      NW: [0.25, 0.25],
-      NE: [0.75, 0.25],
-      SW: [0.25, 0.75],
-      SE: [0.75, 0.75]
+    .line-v {
+      left: 50%;
+      top: 0;
+      width: 2px;
+      height: 100%;
+    }
+
+    .line-h {
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: 2px;
+    }
+
+    .label {
+      position: absolute;
+      color: rgba(255,255,255,.35);
+      font: 24px system-ui;
+      z-index: 4;
+    }
+
+    .nw { left: 20px; top: 20px; }
+    .ne { right: 20px; top: 70px; }
+    .sw { left: 20px; bottom: 20px; }
+    .se { right: 20px; bottom: 20px; }
+
+    .emoji {
+      position: absolute;
+      font-size: 80px;
+      pointer-events: none;
+      animation: floatUp 3s ease-out forwards;
+      text-shadow: 0 0 20px rgba(255,255,255,.7);
+      z-index: 10;
+      transform: translate(-50%, -50%);
+    }
+
+    #toggleCameraBtn {
+      position: fixed;
+      right: 18px;
+      top: 18px;
+      z-index: 9999;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 10px;
+      background: rgba(255,255,255,.88);
+      color: #111;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    #debug {
+      position: fixed;
+      left: 10px;
+      top: 10px;
+      z-index: 9999;
+      color: #0f0;
+      background: rgba(0,0,0,.75);
+      font: 14px monospace;
+      padding: 8px;
+      white-space: pre-wrap;
+      max-width: 55vw;
+    }
+
+    @keyframes floatUp {
+      0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) translateY(40px) scale(.7);
+      }
+      20% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) translateY(-160px) scale(1.6);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="screen">
+    <video id="cameraVideo" autoplay playsinline muted></video>
+    <div id="darkBackground"></div>
+
+    <div class="line-v"></div>
+    <div class="line-h"></div>
+
+    <div class="label nw">左上</div>
+    <div class="label ne">右上</div>
+    <div class="label sw">左下</div>
+    <div class="label se">右下</div>
+  </div>
+
+  <button id="toggleCameraBtn">背景切替：カメラOFF</button>
+  <div id="debug">起動中...</div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, onChildAdded, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAaqSeyjtG7Y0CbhAITOjjP5lvAAbk2-k",
+      authDomain: "mosw-f855e.firebaseapp.com",
+      databaseURL: "https://mosw-f855e-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "mosw-f855e",
+      storageBucket: "mosw-f855e.firebasestorage.app",
+      messagingSenderId: "1093592474312",
+      appId: "1:1093592474312:web:76370050415013cf9bbbfd"
     };
-    const [x, y] = fallback[data.quadrant] || [0.5, 0.5];
-    showEmoji(data.emoji, x, y);
-  }
-});
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const screen = document.getElementById("screen");
+    const debug = document.getElementById("debug");
+    const cameraVideo = document.getElementById("cameraVideo");
+    const darkBackground = document.getElementById("darkBackground");
+    const toggleCameraBtn = document.getElementById("toggleCameraBtn");
+
+    let cameraOn = false;
+    let cameraStream = null;
+
+    function log(msg) {
+      console.log(msg);
+      debug.textContent = msg;
+    }
+
+    async function startCamera() {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: "environment"
+          },
+          audio: false
+        });
+
+        cameraVideo.srcObject = cameraStream;
+        cameraVideo.style.display = "block";
+        darkBackground.style.display = "none";
+
+        cameraOn = true;
+        toggleCameraBtn.textContent = "背景切替：カメラON";
+        log("カメラ背景ON。リアクション待機中...");
+      } catch (e) {
+        console.error(e);
+        log("カメラ起動エラー: " + e.message);
+      }
+    }
+
+    function stopCamera() {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+      }
+
+      cameraVideo.srcObject = null;
+      cameraVideo.style.display = "none";
+      darkBackground.style.display = "block";
+
+      cameraOn = false;
+      toggleCameraBtn.textContent = "背景切替：カメラOFF";
+      log("黒背景ON。リアクション待機中...");
+    }
+
+    toggleCameraBtn.addEventListener("click", async () => {
+      if (cameraOn) {
+        stopCamera();
+      } else {
+        await startCamera();
+      }
+    });
+
+    function showEmoji(emoji, x, y) {
+      const el = document.createElement("div");
+      el.className = "emoji";
+      el.textContent = emoji;
+
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+
+      el.style.left = `${x * w}px`;
+      el.style.top = `${y * h}px`;
+
+      screen.appendChild(el);
+      setTimeout(() => el.remove(), 3000);
+    }
+
+    try {
+      const reactionsRef = ref(db, "reactions");
+
+      const snapshot = await get(reactionsRef);
+      if (snapshot.exists()) {
+        log("既存データあり。新規送信を待機中...");
+      } else {
+        log("reactionsは空。スマホから送信してください。");
+      }
+
+      onChildAdded(reactionsRef, snapshot => {
+        const data = snapshot.val();
+        log("受信: " + JSON.stringify(data));
+
+        if (!data || !data.emoji) return;
+
+        if (typeof data.x === "number" && typeof data.y === "number") {
+          showEmoji(data.emoji, data.x, data.y);
+        } else if (data.quadrant) {
+          const fallback = {
+            NW: [0.25, 0.25],
+            NE: [0.75, 0.25],
+            SW: [0.25, 0.75],
+            SE: [0.75, 0.75]
+          };
+          const [x, y] = fallback[data.quadrant] || [0.5, 0.5];
+          showEmoji(data.emoji, x, y);
+        }
+      });
+
+    } catch (e) {
+      log("Firebase読取エラー: " + e.message);
+      console.error(e);
+    }
+  </script>
+</body>
+</html>
