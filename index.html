@@ -13,24 +13,16 @@
     }
     .selected { border-color:white; background:#555; }
     #stage {
-      width: 90vw;
-      max-width: 520px;
-      aspect-ratio: 16 / 9;
-      margin: 18px auto;
-      border: 2px solid #aaa;
-      position: relative;
-      background: linear-gradient(135deg,#222,#333);
-      touch-action: none;
+      width: 90vw; max-width: 520px; aspect-ratio: 16 / 9;
+      margin: 18px auto; border: 2px solid #aaa; position: relative;
+      background: linear-gradient(135deg,#222,#333); touch-action: none;
     }
     .grid-v, .grid-h { position:absolute; background:rgba(255,255,255,.25); }
     .grid-v { top:0; bottom:0; width:1px; }
     .grid-h { left:0; right:0; height:1px; }
     #marker {
-      position:absolute;
-      transform: translate(-50%, -50%);
-      font-size: 34px;
-      display:none;
-      pointer-events:none;
+      position:absolute; transform: translate(-50%, -50%);
+      font-size: 34px; display:none; pointer-events:none;
     }
     .send, .done {
       margin-top: 18px; font-size: 22px; padding: 14px 32px;
@@ -57,9 +49,7 @@
   <button class="emoji" data-emoji="🍻">🍻</button>
 
   <h2>表示したい場所をタッチ</h2>
-  <div id="stage">
-    <div id="marker"></div>
-  </div>
+  <div id="stage"><div id="marker"></div></div>
 
   <button class="send" id="sendBtn">送信</button>
   <div id="status">絵文字と表示位置を選んでください</div>
@@ -86,11 +76,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    let selectedEmoji = null;
-    let selectedX = null;
-    let selectedY = null;
-    let selectedCol = null;
-    let selectedRow = null;
+    let selectedEmoji = null, selectedX = null, selectedY = null;
 
     const stage = document.getElementById("stage");
     const marker = document.getElementById("marker");
@@ -100,7 +86,6 @@
     const sentBox = document.getElementById("sentBox");
     const sentMessage = document.getElementById("sentMessage");
 
-    // 5列×3行のガイド線
     for (let i = 1; i < 5; i++) {
       const v = document.createElement("div");
       v.className = "grid-v";
@@ -121,7 +106,6 @@
         selectedEmoji = btn.dataset.emoji;
         marker.textContent = selectedEmoji;
         if (selectedX !== null) marker.style.display = "block";
-        status.textContent = "表示位置をタッチしてください";
       });
     });
 
@@ -130,17 +114,16 @@
       const x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
       const y = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
 
-      selectedCol = Math.min(4, Math.floor(x * 5));
-      selectedRow = Math.min(2, Math.floor(y * 3));
+      const col = Math.min(4, Math.floor(x * 5));
+      const row = Math.min(2, Math.floor(y * 3));
 
-      selectedX = (selectedCol + 0.5) / 5;
-      selectedY = (selectedRow + 0.5) / 3;
+      selectedX = (col + 0.5) / 5;
+      selectedY = (row + 0.5) / 3;
 
       marker.style.left = `${selectedX * 100}%`;
       marker.style.top = `${selectedY * 100}%`;
       marker.textContent = selectedEmoji || "📍";
       marker.style.display = "block";
-
       status.textContent = "絵文字と位置を確認して送信してください";
     });
 
@@ -152,23 +135,20 @@
 
       sendBtn.disabled = true;
       sendBtn.textContent = "送信中...";
-      status.textContent = "送信中です";
 
       try {
         await push(ref(db, "reactions"), {
           emoji: selectedEmoji,
           x: selectedX,
           y: selectedY,
-          col: selectedCol,
-          row: selectedRow,
           createdAt: serverTimestamp()
         });
 
-        status.textContent = "";
         sentMessage.textContent = `${selectedEmoji} を送信しました`;
         sentBox.style.display = "block";
         doneBtn.style.display = "inline-block";
         sendBtn.style.display = "none";
+        status.textContent = "";
 
       } catch (e) {
         status.textContent = `送信エラー：${e.message}`;
@@ -181,9 +161,6 @@
       selectedEmoji = null;
       selectedX = null;
       selectedY = null;
-      selectedCol = null;
-      selectedRow = null;
-
       document.querySelectorAll(".emoji").forEach(b => b.classList.remove("selected"));
       marker.style.display = "none";
       sentBox.style.display = "none";
