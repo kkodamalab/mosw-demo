@@ -142,7 +142,7 @@
     <video id="cameraB" autoplay playsinline muted></video>
 
     <div id="message">カメラ開始を押してください</div>
-    <div id="hint">1 RGB / 2 Glitch / 3 Mirror / 4 Wave / 0 Clear / S Sync / F Fullscreen</div>
+    <div id="hint">1 RGB / 2 Glitch / 3 Mirror / 4 Wave / 5 Mono / 6 Invert / 7 Pixel / 8 Strobe / 9 Zoom / 0 Clear / S Sync / F Fullscreen</div>
 
     <div id="controls">
       <div class="control-row">
@@ -165,6 +165,11 @@
         <button class="fxBtn" data-fx="glitch">2 Glitch</button>
         <button class="fxBtn" data-fx="mirror">3 Mirror</button>
         <button class="fxBtn" data-fx="wave">4 Wave</button>
+        <button class="fxBtn" data-fx="mono">5 Mono</button>
+        <button class="fxBtn" data-fx="invert">6 Invert</button>
+        <button class="fxBtn" data-fx="pixel">7 Pixel</button>
+        <button class="fxBtn" data-fx="strobe">8 Strobe</button>
+        <button class="fxBtn" data-fx="zoom">9 Zoom</button>
         <span class="mini-label">Power</span><input id="powerSlider" type="range" min="0" max="100" value="55">
       </div>
     </div>
@@ -211,6 +216,10 @@
     let power = 0.55;
     let sync = false;
     let t = 0;
+    let frame = 0;
+
+    const fxBuffer = document.createElement("canvas");
+    const fxCtx = fxBuffer.getContext("2d");
 
     function resizeCanvas() {
       const dpr = window.devicePixelRatio || 1;
@@ -310,12 +319,8 @@
     }
 
     function toggleFx(nextFx) {
-      if (activeFx.has(nextFx)) {
-        activeFx.delete(nextFx);
-      } else {
-        activeFx.add(nextFx);
-      }
-
+      if (activeFx.has(nextFx)) activeFx.delete(nextFx);
+      else activeFx.add(nextFx);
       updateFxButtons();
     }
 
@@ -352,6 +357,11 @@
       if (e.key === "2") toggleFx("glitch");
       if (e.key === "3") toggleFx("mirror");
       if (e.key === "4") toggleFx("wave");
+      if (e.key === "5") toggleFx("mono");
+      if (e.key === "6") toggleFx("invert");
+      if (e.key === "7") toggleFx("pixel");
+      if (e.key === "8") toggleFx("strobe");
+      if (e.key === "9") toggleFx("zoom");
       if (e.key.toLowerCase() === "s") syncBtn.click();
       if (e.key.toLowerCase() === "f") document.documentElement.requestFullscreen();
     });
@@ -427,11 +437,9 @@
       }
 
       if (activeFx.has("wave")) {
-        const temp = document.createElement("canvas");
-        temp.width = w;
-        temp.height = h;
-        const tctx = temp.getContext("2d");
-        tctx.drawImage(canvas, 0, 0, w, h);
+        fxBuffer.width = w;
+        fxBuffer.height = h;
+        fxCtx.drawImage(canvas, 0, 0, w, h);
 
         const amp = 4 + power * 28;
         const freq = 0.012 + power * 0.018;
@@ -439,18 +447,90 @@
 
         for (let y = 0; y < h; y += slice) {
           const dx = Math.sin(y * freq + t) * amp;
-          ctx.drawImage(temp, 0, y, w, slice, dx, y, w, slice);
+          ctx.drawImage(fxBuffer, 0, y, w, slice, dx, y, w, slice);
         }
       }
 
       if (activeFx.has("glitch")) {
-        const count = 8 + Math.floor(power * 32);
-        for (let i = 0; i < count; i++) {
-          const y = Math.random() * h;
-          const sh = 4 + Math.random() * 34;
-          const dx = (Math.random() - 0.5) * power * 110;
-          ctx.drawImage(canvas, 0, y, w, sh, dx, y, w, sh);
+        const glitchInterval = Math.max(4, Math.floor(14 - power * 8));
+
+        if (frame % glitchInterval === 0) {
+          const count = 3 + Math.floor(power * 14);
+
+          for (let i = 0; i < count; i++) {
+            const y = Math.random() * h;
+            const sh = 5 + Math.random() * 28;
+            const dx = (Math.random() - 0.5) * power * 90;
+            ctx.drawImage(canvas, 0, y, w, sh, dx, y, w, sh);
+          }
         }
+      }
+
+      if (activeFx.has("mono") || activeFx.has("invert")) {
+        const img = ctx.getImageData(0, 0, w, h);
+        const d = img.data;
+
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i];
+          const g = d[i + 1];
+          const b = d[i + 2];
+
+          if (activeFx.has("mono")) {
+            const gray = (r + g + b) / 3;
+            d[i] = r * (1 - power) + gray * power;
+            d[i + 1] = g * (1 - power) + gray * power;
+            d[i + 2] = b * (1 - power) + gray * power;
+          }
+
+          if (activeFx.has("invert")) {
+            d[i] = d[i] * (1 - power) + (255 - d[i]) * power;
+            d[i + 1] = d[i + 1] * (1 - power) + (255 - d[i + 1]) * power;
+            d[i + 2] = d[i + 2] * (1 - power) + (255 - d[i + 2]) * power;
+          }
+        }
+
+        ctx.putImageData(img, 0, 0);
+      }
+
+      if (activeFx.has("pixel")) {
+        const scale = 0.04 + (1 - power) * 0.18;
+        const sw = Math.max(24, Math.floor(w * scale));
+        const sh = Math.max(18, Math.floor(h * scale));
+
+        fxBuffer.width = sw;
+        fxBuffer.height = sh;
+        fxCtx.imageSmoothingEnabled = false;
+        fxCtx.drawImage(canvas, 0, 0, sw, sh);
+
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(fxBuffer, 0, 0, sw, sh, 0, 0, w, h);
+        ctx.imageSmoothingEnabled = true;
+      }
+
+      if (activeFx.has("strobe")) {
+        const speed = 0.08 + power * 0.22;
+        const flash = Math.sin(t * speed * 20) > 0.72;
+
+        if (flash) {
+          ctx.fillStyle = `rgba(255,255,255,${0.18 + power * 0.45})`;
+          ctx.fillRect(0, 0, w, h);
+        }
+      }
+
+      if (activeFx.has("zoom")) {
+        const z = 1 + power * 0.08 + Math.sin(t * 1.5) * power * 0.025;
+        const nw = w * z;
+        const nh = h * z;
+        const x = (w - nw) / 2;
+        const y = (h - nh) / 2;
+
+        fxBuffer.width = w;
+        fxBuffer.height = h;
+        fxCtx.drawImage(canvas, 0, 0, w, h);
+
+        ctx.globalAlpha = 0.45 + power * 0.35;
+        ctx.drawImage(fxBuffer, x, y, nw, nh);
+        ctx.globalAlpha = 1;
       }
     }
 
@@ -458,6 +538,7 @@
       const w = window.innerWidth;
       const h = window.innerHeight;
       t += 0.05;
+      frame++;
 
       drawBase(w, h);
       applyFx(w, h);
