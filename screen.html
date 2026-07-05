@@ -70,6 +70,12 @@
       font-weight: 700;
     }
 
+    #syncBtn.active {
+      background: #ff2bd6;
+      color: #fff;
+      font-weight: 800;
+    }
+
     body.event-mode #controls,
     body.event-mode #debug {
       display: none;
@@ -119,6 +125,7 @@
 
   <div id="controls">
     <button id="startCameraBtn">カメラ開始</button>
+    <button id="syncBtn">SYNC OFF</button>
     <button id="clearEffectsBtn">0 Clear</button>
     <button data-effect="rgb">1 RGB</button>
     <button data-effect="glitch">2 Glitch</button>
@@ -158,6 +165,7 @@
     const video = document.getElementById("cameraVideo");
     const debug = document.getElementById("debug");
     const startCameraBtn = document.getElementById("startCameraBtn");
+    const syncBtn = document.getElementById("syncBtn");
     const clearEffectsBtn = document.getElementById("clearEffectsBtn");
     const effectButtons = document.querySelectorAll("[data-effect]");
 
@@ -170,6 +178,19 @@
     let activeEffects = new Set();
     let cameraStream = null;
     let t = 0;
+
+    let syncOn = false;
+    let audioCtx = null;
+    let analyser = null;
+    let audioData = null;
+    let micStream = null;
+
+    let bassEnergy = 0;
+    let bassAvg = 0;
+    let beatPulse = 0;
+    let lastBeatTime = 0;
+    let estimatedBpm = 0;
+    let beatIntervals = [];
 
     function log(msg) {
       console.log(msg);
@@ -202,13 +223,134 @@
         video.srcObject = cameraStream;
         await video.play();
         startCameraBtn.textContent = "カメラON";
-        log("カメラON。0〜4キーでエフェクトON/OFF。複数選択可。");
+        log("カメラON。0〜4キーでエフェクトON/OFF。SでSYNC。");
       } catch (e) {
         log("カメラ起動エラー: " + e.message);
       }
     }
 
     startCameraBtn.addEventListener("click", startCamera);
+
+    async function startSync() {
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          },
+          video: false
+        });
+
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioCtx.createMediaStreamSource(micStream);
+
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.75;
+
+        audioData = new Uint8Array(analyser.frequencyBinCount);
+        source.connect(analyser);
+
+        syncOn = true;
+        syncBtn.classList.add("active");
+        syncBtn.textContent = "SYNC ON";
+
+        log("SYNC ON。Glitch/WaveがONの時、低音ピークに同期します。");
+      } catch (e) {
+        log("SYNC起動エラー: " + e.message);
+      }
+    }
+
+    function stopSync() {
+      syncOn = false;
+
+      if (micStream) {
+        micStream.getTracks().forEach(track => track.stop());
+        micStream = null;
+      }
+
+      if (audioCtx) {
+        audioCtx.close();
+        audioCtx = null;
+      }
+
+      analyser = null;
+      audioData = null;
+      beatPulse = 0;
+      bassEnergy = 0;
+      bassAvg = 0;
+      beatIntervals = [];
+      estimatedBpm = 0;
+
+      syncBtn.classList.remove("active");
+      syncBtn.textContent = "SYNC OFF";
+
+      log("SYNC OFF");
+    }
+
+    syncBtn.addEventListener("click", async () => {
+      if (syncOn) {
+        stopSync();
+      } else {
+        await startSync();
+      }
+    });
+
+    function updateAudioSync() {
+      if (!syncOn || !analyser || !audioData || !audioCtx) {
+        beatPulse *= 0.9;
+        return;
+      }
+
+      analyser.getByteFrequencyData(audioData);
+
+      const sampleRate = audioCtx.sampleRate;
+      const binHz = sampleRate / analyser.fftSize;
+
+      const lowMin = 50;
+      const lowMax = 180;
+
+      let sum = 0;
+      let count = 0;
+
+      for (let i = 0; i < audioData.length; i++) {
+        const hz = i * binHz;
+        if (hz >= lowMin && hz <= lowMax) {
+          sum += audioData[i] / 255;
+          count++;
+        }
+      }
+
+      bassEnergy = count ? sum / count : 0;
+
+      if (bassAvg === 0) bassAvg = bassEnergy;
+      bassAvg = bassAvg * 0.96 + bassEnergy * 0.04;
+
+      const now = performance.now();
+      const threshold = Math.max(0.12, bassAvg * 1.45);
+      const minInterval = 260;
+
+      const isBeat = bassEnergy > threshold && now - lastBeatTime > minInterval;
+
+      if (isBeat) {
+        const interval = now - lastBeatTime;
+
+        if (lastBeatTime > 0 && interval > 300 && interval < 1200) {
+          beatIntervals.push(interval);
+          if (beatIntervals.length > 8) beatIntervals.shift();
+
+          const avgInterval = beatIntervals.reduce((a, b) => a + b, 0) / beatIntervals.length;
+          estimatedBpm = Math.round(60000 / avgInterval);
+        }
+
+        lastBeatTime = now;
+        beatPulse = 1;
+      }
+
+      beatPulse *= 0.88;
+      if (beatPulse < 0.01) beatPulse = 0;
+    }
 
     function updateButtons() {
       effectButtons.forEach(btn => {
@@ -245,6 +387,7 @@
       if (e.key === "2") toggleEffect("glitch");
       if (e.key === "3") toggleEffect("mirror");
       if (e.key === "4") toggleEffect("wave");
+      if (e.key.toLowerCase() === "s") syncBtn.click();
       if (e.key.toLowerCase() === "f") document.documentElement.requestFullscreen?.();
     });
 
@@ -292,9 +435,13 @@
 
       baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
 
+      const syncBoost = syncOn ? beatPulse : 0;
       const sliceH = 4;
+      const amp = 18 + syncBoost * 55;
+      const speed = syncOn ? 0.13 : 0.08;
+
       for (let y = 0; y < baseCanvas.height; y += sliceH) {
-        const offset = Math.sin(y * 0.05 + t * 0.08) * 18;
+        const offset = Math.sin(y * 0.05 + t * speed) * amp;
         baseCtx.drawImage(
           tempCanvas,
           0, y, tempCanvas.width, sliceH,
@@ -313,7 +460,7 @@
       ctx.drawImage(baseCanvas, 0, 0, canvas.width, canvas.height);
 
       if (activeEffects.has("rgb")) {
-        const shift = 10 + Math.sin(t * 0.08) * 8;
+        const shift = 10 + Math.sin(t * 0.08) * 8 + beatPulse * 24;
 
         ctx.globalCompositeOperation = "screen";
         ctx.globalAlpha = 0.55;
@@ -333,14 +480,17 @@
       }
 
       if (activeEffects.has("glitch")) {
-        const strips = 18;
+        const syncBoost = syncOn ? beatPulse : 0;
+        const strips = syncOn ? Math.round(8 + syncBoost * 35) : 18;
+        const probability = syncOn ? 0.18 + syncBoost * 0.65 : 0.55;
+        const maxOffset = syncOn ? 35 + syncBoost * 180 : 90;
 
         for (let i = 0; i < strips; i++) {
-          if (Math.random() > 0.45) continue;
+          if (Math.random() > probability) continue;
 
           const y = Math.random() * canvas.height;
-          const h = 8 + Math.random() * 45;
-          const xOffset = (Math.random() - 0.5) * 90;
+          const h = 8 + Math.random() * (25 + syncBoost * 80);
+          const xOffset = (Math.random() - 0.5) * maxOffset;
 
           ctx.drawImage(
             canvas,
@@ -349,17 +499,29 @@
           );
         }
 
-        if (Math.random() > 0.75) {
-          ctx.globalAlpha = 0.4;
+        if (Math.random() < 0.04 + syncBoost * 0.55) {
+          ctx.globalAlpha = 0.25 + syncBoost * 0.45;
           ctx.fillStyle = "white";
-          ctx.fillRect(0, Math.random() * canvas.height, canvas.width, 4);
+          ctx.fillRect(0, Math.random() * canvas.height, canvas.width, 4 + syncBoost * 12);
           ctx.globalAlpha = 1;
         }
+      }
+
+      if (syncOn && isDebugMode) {
+        ctx.fillStyle = "rgba(0,0,0,.55)";
+        ctx.fillRect(12, 12, 260, 72);
+        ctx.fillStyle = "#00ff66";
+        ctx.font = "14px monospace";
+        ctx.fillText("SYNC ON", 24, 36);
+        ctx.fillText("Bass: " + bassEnergy.toFixed(3), 24, 56);
+        ctx.fillText("BPM: " + (estimatedBpm || "--"), 24, 76);
       }
     }
 
     function drawLoop() {
       t++;
+
+      updateAudioSync();
 
       if (video.readyState >= 2) {
         baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
@@ -376,7 +538,7 @@
         ctx.font = "28px system-ui";
         ctx.fillText("カメラ開始を押してください", 40, 60);
         ctx.font = "18px system-ui";
-        ctx.fillText("1 RGB / 2 Glitch / 3 Mirror / 4 Wave / 0 Clear / F Fullscreen", 40, 96);
+        ctx.fillText("1 RGB / 2 Glitch / 3 Mirror / 4 Wave / 0 Clear / S Sync / F Fullscreen", 40, 96);
       }
 
       requestAnimationFrame(drawLoop);
