@@ -150,6 +150,7 @@
 
       <div class="control-row">
         <button id="syncBtn">SYNC OFF</button>
+        <button id="gestureBtn" class="active">GESTURE ON</button>
         <button id="clearFxBtn" class="active">0 Clear</button>
         <button class="fxBtn" data-fx="rgb">1 RGB</button>
         <button class="fxBtn" data-fx="glitch">2 Glitch</button>
@@ -193,6 +194,7 @@
     const videoB = document.getElementById("cameraB");
     const startBtn = document.getElementById("startBtn");
     const syncBtn = document.getElementById("syncBtn");
+    const gestureBtn = document.getElementById("gestureBtn");
     const clearFxBtn = document.getElementById("clearFxBtn");
     const camSelectA = document.getElementById("camSelectA");
     const camSelectB = document.getElementById("camSelectB");
@@ -209,6 +211,7 @@
     let split = 0.5;
     let power = 0.55;
     let sync = false;
+    let gestureEnabled = true;
     let t = 0;
     let frame = 0;
 
@@ -246,7 +249,7 @@
         numHands: 2
       });
 
-      gestureStatus.textContent = "Hand: ON";
+      gestureStatus.textContent = gestureEnabled ? "Hand: ON" : "Hand: OFF";
     }
 
     async function listCameras() {
@@ -357,6 +360,13 @@
       syncBtn.classList.toggle("active", sync);
     };
 
+    gestureBtn.onclick = () => {
+      gestureEnabled = !gestureEnabled;
+      gestureBtn.textContent = gestureEnabled ? "GESTURE ON" : "GESTURE OFF";
+      gestureBtn.classList.toggle("active", gestureEnabled);
+      gestureStatus.textContent = gestureEnabled ? "Hand: ON" : "Hand: OFF";
+    };
+
     splitSlider.oninput = () => {
       split = Number(splitSlider.value) / 100;
       const n = Math.round(split * 10);
@@ -379,6 +389,7 @@
       if (e.key === "8") toggleFx("strobe");
       if (e.key === "9") toggleFx("zoom");
       if (e.key.toLowerCase() === "s") syncBtn.click();
+      if (e.key.toLowerCase() === "g") gestureBtn.click();
       if (e.key.toLowerCase() === "f") document.documentElement.requestFullscreen();
     });
 
@@ -553,17 +564,19 @@
       const palmSize = dist(lm[0], lm[9]);
 
       if (okDist < palmSize * 0.38 && middleExt && ringExt && pinkyExt) return "OK";
-
       if (indexExt && middleExt && !ringExt && !pinkyExt && dist(indexTip, middleTip) > palmSize * 0.35) return "PEACE";
-
       if (thumbTip.y < lm[3].y && !indexExt && !middleExt && !ringExt && !pinkyExt) return "GOOD";
-
       if (indexExt && middleExt && dist(indexTip, middleTip) < palmSize * 0.35) return "HEART";
 
       return "";
     }
 
     function handleHands() {
+      if (!gestureEnabled) {
+        gestureStatus.textContent = "Hand: OFF";
+        return;
+      }
+
       if (!handLandmarker || !videoA.videoWidth) return;
       if (frame % 5 !== 0) return;
 
