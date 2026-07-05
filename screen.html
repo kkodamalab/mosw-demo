@@ -160,7 +160,7 @@
 
       <div class="control-row">
         <button id="syncBtn">SYNC OFF</button>
-        <button class="fxBtn active" data-fx="clear">0 Clear</button>
+        <button id="clearFxBtn" class="active">0 Clear</button>
         <button class="fxBtn" data-fx="rgb">1 RGB</button>
         <button class="fxBtn" data-fx="glitch">2 Glitch</button>
         <button class="fxBtn" data-fx="mirror">3 Mirror</button>
@@ -195,6 +195,7 @@
 
     const startBtn = document.getElementById("startBtn");
     const syncBtn = document.getElementById("syncBtn");
+    const clearFxBtn = document.getElementById("clearFxBtn");
     const camSelectA = document.getElementById("camSelectA");
     const camSelectB = document.getElementById("camSelectB");
     const splitSlider = document.getElementById("splitSlider");
@@ -205,7 +206,7 @@
     let streamA = null;
     let streamB = null;
     let camMode = "A";
-    let fx = "clear";
+    let activeFx = new Set();
     let split = 0.5;
     let power = 0.55;
     let sync = false;
@@ -300,16 +301,34 @@
       };
     });
 
+    function updateFxButtons() {
+      document.querySelectorAll(".fxBtn").forEach(btn => {
+        btn.classList.toggle("active", activeFx.has(btn.dataset.fx));
+      });
+
+      clearFxBtn.classList.toggle("active", activeFx.size === 0);
+    }
+
+    function toggleFx(nextFx) {
+      if (activeFx.has(nextFx)) {
+        activeFx.delete(nextFx);
+      } else {
+        activeFx.add(nextFx);
+      }
+
+      updateFxButtons();
+    }
+
+    function clearFx() {
+      activeFx.clear();
+      updateFxButtons();
+    }
+
     document.querySelectorAll(".fxBtn").forEach(btn => {
-      btn.onclick = () => setFx(btn.dataset.fx);
+      btn.onclick = () => toggleFx(btn.dataset.fx);
     });
 
-    function setFx(nextFx) {
-      fx = nextFx;
-      document.querySelectorAll(".fxBtn").forEach(b => {
-        b.classList.toggle("active", b.dataset.fx === fx);
-      });
-    }
+    clearFxBtn.onclick = clearFx;
 
     syncBtn.onclick = () => {
       sync = !sync;
@@ -328,11 +347,11 @@
     };
 
     window.addEventListener("keydown", e => {
-      if (e.key === "0") setFx("clear");
-      if (e.key === "1") setFx("rgb");
-      if (e.key === "2") setFx("glitch");
-      if (e.key === "3") setFx("mirror");
-      if (e.key === "4") setFx("wave");
+      if (e.key === "0") clearFx();
+      if (e.key === "1") toggleFx("rgb");
+      if (e.key === "2") toggleFx("glitch");
+      if (e.key === "3") toggleFx("mirror");
+      if (e.key === "4") toggleFx("wave");
       if (e.key.toLowerCase() === "s") syncBtn.click();
       if (e.key.toLowerCase() === "f") document.documentElement.requestFullscreen();
     });
@@ -386,9 +405,9 @@
     }
 
     function applyFx(w, h) {
-      if (fx === "clear") return;
+      if (activeFx.size === 0) return;
 
-      if (fx === "rgb") {
+      if (activeFx.has("rgb")) {
         const shift = 5 + power * 35;
         ctx.globalCompositeOperation = "screen";
         ctx.globalAlpha = 0.45;
@@ -398,17 +417,7 @@
         ctx.globalCompositeOperation = "source-over";
       }
 
-      if (fx === "glitch") {
-        const count = 8 + Math.floor(power * 32);
-        for (let i = 0; i < count; i++) {
-          const y = Math.random() * h;
-          const sh = 4 + Math.random() * 34;
-          const dx = (Math.random() - 0.5) * power * 110;
-          ctx.drawImage(canvas, 0, y, w, sh, dx, y, w, sh);
-        }
-      }
-
-      if (fx === "mirror") {
+      if (activeFx.has("mirror")) {
         ctx.save();
         ctx.globalAlpha = 0.35 + power * 0.5;
         ctx.translate(w, 0);
@@ -417,7 +426,7 @@
         ctx.restore();
       }
 
-      if (fx === "wave") {
+      if (activeFx.has("wave")) {
         const temp = document.createElement("canvas");
         temp.width = w;
         temp.height = h;
@@ -431,6 +440,16 @@
         for (let y = 0; y < h; y += slice) {
           const dx = Math.sin(y * freq + t) * amp;
           ctx.drawImage(temp, 0, y, w, slice, dx, y, w, slice);
+        }
+      }
+
+      if (activeFx.has("glitch")) {
+        const count = 8 + Math.floor(power * 32);
+        for (let i = 0; i < count; i++) {
+          const y = Math.random() * h;
+          const sh = 4 + Math.random() * 34;
+          const dx = (Math.random() - 0.5) * power * 110;
+          ctx.drawImage(canvas, 0, y, w, sh, dx, y, w, sh);
         }
       }
     }
@@ -472,6 +491,7 @@
       });
     });
 
+    updateFxButtons();
     loop();
   </script>
 </body>
