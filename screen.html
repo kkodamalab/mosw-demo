@@ -30,9 +30,7 @@
       background: #000;
     }
 
-    video {
-      display: none;
-    }
+    video { display: none; }
 
     #message {
       position: absolute;
@@ -45,14 +43,17 @@
       pointer-events: none;
     }
 
-    #hint {
-      position: absolute;
-      top: 74px;
-      left: 42px;
-      z-index: 4;
-      color: #fff;
-      font-size: 17px;
-      pointer-events: none;
+    #gestureStatus {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 20;
+      color: white;
+      font-size: 12px;
+      opacity: 0.75;
+      background: rgba(0,0,0,0.35);
+      padding: 7px 10px;
+      border-radius: 10px;
     }
 
     #controls {
@@ -78,9 +79,7 @@
       flex-wrap: wrap;
     }
 
-    button, select, input {
-      font-size: 13px;
-    }
+    button, select, input { font-size: 13px; }
 
     button {
       border: 0;
@@ -103,9 +102,7 @@
       padding: 4px;
     }
 
-    input[type="range"] {
-      width: 120px;
-    }
+    input[type="range"] { width: 120px; }
 
     .mini-label {
       opacity: 0.9;
@@ -121,20 +118,13 @@
     }
 
     @keyframes fly {
-      0% {
-        transform: translateY(0) scale(0.5) rotate(0deg);
-        opacity: 0;
-      }
-      15% {
-        opacity: 1;
-      }
-      100% {
-        transform: translateY(-65vh) scale(1.9) rotate(360deg);
-        opacity: 0;
-      }
+      0% { transform: translateY(0) scale(0.5) rotate(0deg); opacity: 0; }
+      15% { opacity: 1; }
+      100% { transform: translateY(-65vh) scale(1.9) rotate(360deg); opacity: 0; }
     }
   </style>
 </head>
+
 <body>
   <div id="screen">
     <canvas id="vjCanvas"></canvas>
@@ -142,7 +132,7 @@
     <video id="cameraB" autoplay playsinline muted></video>
 
     <div id="message">カメラ開始を押してください</div>
-    <div id="hint">1 RGB / 2 Glitch / 3 Mirror / 4 Wave / 5 Mono / 6 Invert / 7 Pixel / 8 Strobe / 9 Zoom / 0 Clear / S Sync / F Fullscreen</div>
+    <div id="gestureStatus">Hand: OFF</div>
 
     <div id="controls">
       <div class="control-row">
@@ -178,6 +168,10 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getDatabase, ref, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import {
+      HandLandmarker,
+      FilesetResolver
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
     const firebaseConfig = {
       apiKey: "AIzaSyD4rBlSp7clQ6Gh_vfSjqiDL-l6fdJsdIM",
@@ -197,7 +191,6 @@
 
     const videoA = document.getElementById("cameraA");
     const videoB = document.getElementById("cameraB");
-
     const startBtn = document.getElementById("startBtn");
     const syncBtn = document.getElementById("syncBtn");
     const clearFxBtn = document.getElementById("clearFxBtn");
@@ -207,6 +200,7 @@
     const splitLabel = document.getElementById("splitLabel");
     const powerSlider = document.getElementById("powerSlider");
     const message = document.getElementById("message");
+    const gestureStatus = document.getElementById("gestureStatus");
 
     let streamA = null;
     let streamB = null;
@@ -217,6 +211,10 @@
     let sync = false;
     let t = 0;
     let frame = 0;
+
+    let handLandmarker = null;
+    let lastGesture = "";
+    let lastGestureTime = 0;
 
     const fxBuffer = document.createElement("canvas");
     const fxCtx = fxBuffer.getContext("2d");
@@ -233,6 +231,24 @@
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
+    async function initHands() {
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        numHands: 2
+      });
+
+      gestureStatus.textContent = "Hand: ON";
+    }
+
     async function listCameras() {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const cams = devices.filter(d => d.kind === "videoinput");
@@ -242,7 +258,6 @@
 
       cams.forEach((cam, i) => {
         const label = cam.label || `Camera ${i + 1}`;
-
         const a = document.createElement("option");
         a.value = cam.deviceId;
         a.textContent = label;
@@ -282,6 +297,8 @@
       streamA = await startCamera(videoA, streamA, camSelectA.value);
       streamB = await startCamera(videoB, streamB, camSelectB.value);
 
+      if (!handLandmarker) await initHands();
+
       startBtn.textContent = "カメラON";
       message.style.display = "none";
     }
@@ -291,6 +308,7 @@
         await startAllCameras();
       } catch (e) {
         alert("カメラ起動に失敗しました: " + e.message);
+        console.error(e);
       }
     };
 
@@ -314,13 +332,11 @@
       document.querySelectorAll(".fxBtn").forEach(btn => {
         btn.classList.toggle("active", activeFx.has(btn.dataset.fx));
       });
-
       clearFxBtn.classList.toggle("active", activeFx.size === 0);
     }
 
     function toggleFx(nextFx) {
-      if (activeFx.has(nextFx)) activeFx.delete(nextFx);
-      else activeFx.add(nextFx);
+      activeFx.has(nextFx) ? activeFx.delete(nextFx) : activeFx.add(nextFx);
       updateFxButtons();
     }
 
@@ -368,7 +384,6 @@
 
     function drawVideoCover(video, x, y, w, h) {
       if (!video.videoWidth || !video.videoHeight) return;
-
       const vw = video.videoWidth;
       const vh = video.videoHeight;
       const scale = Math.max(w / vw, h / vh);
@@ -376,7 +391,6 @@
       const sh = h / scale;
       const sx = (vw - sw) / 2;
       const sy = (vh - sh) / 2;
-
       ctx.drawImage(video, sx, sy, sw, sh, x, y, w, h);
     }
 
@@ -440,23 +454,18 @@
         fxBuffer.width = w;
         fxBuffer.height = h;
         fxCtx.drawImage(canvas, 0, 0, w, h);
-
         const amp = 4 + power * 28;
         const freq = 0.012 + power * 0.018;
-        const slice = 6;
-
-        for (let y = 0; y < h; y += slice) {
+        for (let y = 0; y < h; y += 6) {
           const dx = Math.sin(y * freq + t) * amp;
-          ctx.drawImage(fxBuffer, 0, y, w, slice, dx, y, w, slice);
+          ctx.drawImage(fxBuffer, 0, y, w, 6, dx, y, w, 6);
         }
       }
 
       if (activeFx.has("glitch")) {
-        const glitchInterval = Math.max(4, Math.floor(14 - power * 8));
-
+        const glitchInterval = Math.max(5, Math.floor(16 - power * 8));
         if (frame % glitchInterval === 0) {
           const count = 3 + Math.floor(power * 14);
-
           for (let i = 0; i < count; i++) {
             const y = Math.random() * h;
             const sh = 5 + Math.random() * 28;
@@ -469,11 +478,8 @@
       if (activeFx.has("mono") || activeFx.has("invert")) {
         const img = ctx.getImageData(0, 0, w, h);
         const d = img.data;
-
         for (let i = 0; i < d.length; i += 4) {
-          const r = d[i];
-          const g = d[i + 1];
-          const b = d[i + 2];
+          const r = d[i], g = d[i + 1], b = d[i + 2];
 
           if (activeFx.has("mono")) {
             const gray = (r + g + b) / 3;
@@ -488,7 +494,6 @@
             d[i + 2] = d[i + 2] * (1 - power) + (255 - d[i + 2]) * power;
           }
         }
-
         ctx.putImageData(img, 0, 0);
       }
 
@@ -496,21 +501,17 @@
         const scale = 0.04 + (1 - power) * 0.18;
         const sw = Math.max(24, Math.floor(w * scale));
         const sh = Math.max(18, Math.floor(h * scale));
-
         fxBuffer.width = sw;
         fxBuffer.height = sh;
         fxCtx.imageSmoothingEnabled = false;
         fxCtx.drawImage(canvas, 0, 0, sw, sh);
-
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(fxBuffer, 0, 0, sw, sh, 0, 0, w, h);
         ctx.imageSmoothingEnabled = true;
       }
 
       if (activeFx.has("strobe")) {
-        const speed = 0.08 + power * 0.22;
-        const flash = Math.sin(t * speed * 20) > 0.72;
-
+        const flash = Math.sin(t * (1.5 + power * 5)) > 0.82;
         if (flash) {
           ctx.fillStyle = `rgba(255,255,255,${0.18 + power * 0.45})`;
           ctx.fillRect(0, 0, w, h);
@@ -519,18 +520,74 @@
 
       if (activeFx.has("zoom")) {
         const z = 1 + power * 0.08 + Math.sin(t * 1.5) * power * 0.025;
-        const nw = w * z;
-        const nh = h * z;
-        const x = (w - nw) / 2;
-        const y = (h - nh) / 2;
-
         fxBuffer.width = w;
         fxBuffer.height = h;
         fxCtx.drawImage(canvas, 0, 0, w, h);
-
         ctx.globalAlpha = 0.45 + power * 0.35;
-        ctx.drawImage(fxBuffer, x, y, nw, nh);
+        ctx.drawImage(fxBuffer, (w - w * z) / 2, (h - h * z) / 2, w * z, h * z);
         ctx.globalAlpha = 1;
+      }
+    }
+
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function isExtended(lm, tip, pip) {
+      return lm[tip].y < lm[pip].y;
+    }
+
+    function detectGesture(lm) {
+      const thumbTip = lm[4];
+      const indexTip = lm[8];
+      const middleTip = lm[12];
+      const ringTip = lm[16];
+      const pinkyTip = lm[20];
+
+      const indexExt = isExtended(lm, 8, 6);
+      const middleExt = isExtended(lm, 12, 10);
+      const ringExt = isExtended(lm, 16, 14);
+      const pinkyExt = isExtended(lm, 20, 18);
+
+      const okDist = dist(thumbTip, indexTip);
+      const palmSize = dist(lm[0], lm[9]);
+
+      if (okDist < palmSize * 0.38 && middleExt && ringExt && pinkyExt) return "OK";
+
+      if (indexExt && middleExt && !ringExt && !pinkyExt && dist(indexTip, middleTip) > palmSize * 0.35) return "PEACE";
+
+      if (thumbTip.y < lm[3].y && !indexExt && !middleExt && !ringExt && !pinkyExt) return "GOOD";
+
+      if (indexExt && middleExt && dist(indexTip, middleTip) < palmSize * 0.35) return "HEART";
+
+      return "";
+    }
+
+    function handleHands() {
+      if (!handLandmarker || !videoA.videoWidth) return;
+      if (frame % 5 !== 0) return;
+
+      const result = handLandmarker.detectForVideo(videoA, performance.now());
+      if (!result.landmarks || result.landmarks.length === 0) {
+        gestureStatus.textContent = "Hand: ON";
+        return;
+      }
+
+      for (const lm of result.landmarks) {
+        const gesture = detectGesture(lm);
+        if (!gesture) continue;
+
+        const now = performance.now();
+        if (gesture === lastGesture && now - lastGestureTime < 1600) return;
+
+        lastGesture = gesture;
+        lastGestureTime = now;
+        gestureStatus.textContent = "Gesture: " + gesture;
+
+        if (gesture === "OK") burstEmoji("👌", 7);
+        if (gesture === "PEACE") burstEmoji("✌️", 7);
+        if (gesture === "HEART") burstEmoji("❤️", 9);
+        if (gesture === "GOOD") burstEmoji("👍", 7);
       }
     }
 
@@ -542,6 +599,7 @@
 
       drawBase(w, h);
       applyFx(w, h);
+      handleHands();
 
       requestAnimationFrame(loop);
     }
@@ -555,6 +613,12 @@
       el.style.bottom = "-10vh";
       document.getElementById("screen").appendChild(el);
       setTimeout(() => el.remove(), 3000);
+    }
+
+    function burstEmoji(char, n) {
+      for (let i = 0; i < n; i++) {
+        setTimeout(() => spawnEmoji(char), i * 80);
+      }
     }
 
     function normalizeEmojiPayload(data) {
