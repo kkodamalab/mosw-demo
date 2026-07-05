@@ -119,11 +119,11 @@
 
   <div id="controls">
     <button id="startCameraBtn">カメラ開始</button>
-    <button data-effect="normal" class="active">1 Normal</button>
-    <button data-effect="rgb">2 RGB</button>
-    <button data-effect="glitch">3 Glitch</button>
-    <button data-effect="mirror">4 Mirror</button>
-    <button data-effect="wave">5 Wave</button>
+    <button id="clearEffectsBtn">0 Clear</button>
+    <button data-effect="rgb">1 RGB</button>
+    <button data-effect="glitch">2 Glitch</button>
+    <button data-effect="mirror">3 Mirror</button>
+    <button data-effect="wave">4 Wave</button>
   </div>
 
   <div id="debug">起動中...</div>
@@ -158,12 +158,16 @@
     const video = document.getElementById("cameraVideo");
     const debug = document.getElementById("debug");
     const startCameraBtn = document.getElementById("startCameraBtn");
+    const clearEffectsBtn = document.getElementById("clearEffectsBtn");
     const effectButtons = document.querySelectorAll("[data-effect]");
 
-    const workCanvas = document.createElement("canvas");
-    const workCtx = workCanvas.getContext("2d");
+    const baseCanvas = document.createElement("canvas");
+    const baseCtx = baseCanvas.getContext("2d");
 
-    let currentEffect = "normal";
+    const tempCanvas = document.createElement("canvas");
+    const tempCtx = tempCanvas.getContext("2d");
+
+    let activeEffects = new Set();
     let cameraStream = null;
     let t = 0;
 
@@ -175,8 +179,10 @@
     function resizeCanvas() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      workCanvas.width = 640;
-      workCanvas.height = 360;
+      baseCanvas.width = 640;
+      baseCanvas.height = 360;
+      tempCanvas.width = 640;
+      tempCanvas.height = 360;
     }
 
     window.addEventListener("resize", resizeCanvas);
@@ -196,7 +202,7 @@
         video.srcObject = cameraStream;
         await video.play();
         startCameraBtn.textContent = "カメラON";
-        log("カメラON。1〜5キーでエフェクト切替。");
+        log("カメラON。0〜4キーでエフェクトON/OFF。複数選択可。");
       } catch (e) {
         log("カメラ起動エラー: " + e.message);
       }
@@ -204,26 +210,41 @@
 
     startCameraBtn.addEventListener("click", startCamera);
 
-    function setEffect(effect) {
-      currentEffect = effect;
-
+    function updateButtons() {
       effectButtons.forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.effect === effect);
+        btn.classList.toggle("active", activeEffects.has(btn.dataset.effect));
       });
+    }
 
-      log("Effect: " + effect);
+    function toggleEffect(effect) {
+      if (activeEffects.has(effect)) {
+        activeEffects.delete(effect);
+      } else {
+        activeEffects.add(effect);
+      }
+
+      updateButtons();
+      log("Effects: " + (activeEffects.size ? [...activeEffects].join(", ") : "none"));
+    }
+
+    function clearEffects() {
+      activeEffects.clear();
+      updateButtons();
+      log("Effects: none");
     }
 
     effectButtons.forEach(btn => {
-      btn.addEventListener("click", () => setEffect(btn.dataset.effect));
+      btn.addEventListener("click", () => toggleEffect(btn.dataset.effect));
     });
 
+    clearEffectsBtn.addEventListener("click", clearEffects);
+
     window.addEventListener("keydown", e => {
-      if (e.key === "1") setEffect("normal");
-      if (e.key === "2") setEffect("rgb");
-      if (e.key === "3") setEffect("glitch");
-      if (e.key === "4") setEffect("mirror");
-      if (e.key === "5") setEffect("wave");
+      if (e.key === "0") clearEffects();
+      if (e.key === "1") toggleEffect("rgb");
+      if (e.key === "2") toggleEffect("glitch");
+      if (e.key === "3") toggleEffect("mirror");
+      if (e.key === "4") toggleEffect("wave");
       if (e.key.toLowerCase() === "f") document.documentElement.requestFullscreen?.();
     });
 
@@ -240,117 +261,122 @@
       if (mirror) {
         targetCtx.translate(w, 0);
         targetCtx.scale(-1, 1);
-        targetCtx.drawImage(source, x, y, sw, sh);
-      } else {
-        targetCtx.drawImage(source, x, y, sw, sh);
       }
+      targetCtx.drawImage(source, x, y, sw, sh);
       targetCtx.restore();
     }
 
-    function renderNormal() {
-      ctx.drawImage(workCanvas, 0, 0, canvas.width, canvas.height);
+    function copyCanvas(fromCanvas, toCtx) {
+      toCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+      toCtx.drawImage(fromCanvas, 0, 0);
     }
 
-    function renderMirror() {
-      ctx.save();
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(workCanvas, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
+    function applyMirror() {
+      copyCanvas(baseCanvas, tempCtx);
 
-      ctx.globalAlpha = 0.35;
-      ctx.drawImage(workCanvas, 0, 0, canvas.width, canvas.height);
-      ctx.globalAlpha = 1;
+      baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
+
+      baseCtx.save();
+      baseCtx.translate(baseCanvas.width, 0);
+      baseCtx.scale(-1, 1);
+      baseCtx.drawImage(tempCanvas, 0, 0);
+      baseCtx.restore();
+
+      baseCtx.globalAlpha = 0.35;
+      baseCtx.drawImage(tempCanvas, 0, 0);
+      baseCtx.globalAlpha = 1;
     }
 
-    function renderRgb() {
-      const shift = 10 + Math.sin(t * 0.08) * 8;
+    function applyWave() {
+      copyCanvas(baseCanvas, tempCtx);
 
-      ctx.globalCompositeOperation = "source-over";
-      ctx.filter = "none";
-      ctx.globalAlpha = 1;
-      ctx.drawImage(workCanvas, 0, 0, canvas.width, canvas.height);
+      baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
 
-      ctx.globalCompositeOperation = "screen";
-
-      ctx.globalAlpha = 0.55;
-      ctx.filter = "sepia(1) saturate(8) hue-rotate(-40deg)";
-      ctx.drawImage(workCanvas, shift, 0, canvas.width, canvas.height);
-
-      ctx.filter = "sepia(1) saturate(8) hue-rotate(90deg)";
-      ctx.drawImage(workCanvas, -shift, 0, canvas.width, canvas.height);
-
-      ctx.filter = "sepia(1) saturate(8) hue-rotate(190deg)";
-      ctx.drawImage(workCanvas, 0, shift * 0.5, canvas.width, canvas.height);
-
-      ctx.globalAlpha = 1;
-      ctx.filter = "none";
-      ctx.globalCompositeOperation = "source-over";
-    }
-
-    function renderGlitch() {
-      ctx.drawImage(workCanvas, 0, 0, canvas.width, canvas.height);
-
-      const strips = 18;
-      for (let i = 0; i < strips; i++) {
-        if (Math.random() > 0.45) continue;
-
-        const y = Math.random() * canvas.height;
-        const h = 8 + Math.random() * 45;
-        const xOffset = (Math.random() - 0.5) * 90;
-
-        ctx.drawImage(
-          canvas,
-          0, y, canvas.width, h,
-          xOffset, y, canvas.width, h
+      const sliceH = 4;
+      for (let y = 0; y < baseCanvas.height; y += sliceH) {
+        const offset = Math.sin(y * 0.05 + t * 0.08) * 18;
+        baseCtx.drawImage(
+          tempCanvas,
+          0, y, tempCanvas.width, sliceH,
+          offset, y, baseCanvas.width, sliceH
         );
       }
+    }
 
-      if (Math.random() > 0.75) {
-        ctx.globalAlpha = 0.4;
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, Math.random() * canvas.height, canvas.width, 4);
+    function drawToMain() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+      ctx.filter = "none";
+
+      ctx.drawImage(baseCanvas, 0, 0, canvas.width, canvas.height);
+
+      if (activeEffects.has("rgb")) {
+        const shift = 10 + Math.sin(t * 0.08) * 8;
+
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.55;
+
+        ctx.filter = "sepia(1) saturate(8) hue-rotate(-40deg)";
+        ctx.drawImage(baseCanvas, shift, 0, canvas.width, canvas.height);
+
+        ctx.filter = "sepia(1) saturate(8) hue-rotate(90deg)";
+        ctx.drawImage(baseCanvas, -shift, 0, canvas.width, canvas.height);
+
+        ctx.filter = "sepia(1) saturate(8) hue-rotate(190deg)";
+        ctx.drawImage(baseCanvas, 0, shift * 0.5, canvas.width, canvas.height);
+
         ctx.globalAlpha = 1;
+        ctx.filter = "none";
+        ctx.globalCompositeOperation = "source-over";
       }
-    }
 
-    function renderWave() {
-      const sliceH = 6;
-      for (let y = 0; y < canvas.height; y += sliceH) {
-        const offset = Math.sin(y * 0.025 + t * 0.08) * 28;
-        ctx.drawImage(
-          workCanvas,
-          0, y / canvas.height * workCanvas.height,
-          workCanvas.width,
-          sliceH / canvas.height * workCanvas.height,
-          offset,
-          y,
-          canvas.width,
-          sliceH
-        );
+      if (activeEffects.has("glitch")) {
+        const strips = 18;
+
+        for (let i = 0; i < strips; i++) {
+          if (Math.random() > 0.45) continue;
+
+          const y = Math.random() * canvas.height;
+          const h = 8 + Math.random() * 45;
+          const xOffset = (Math.random() - 0.5) * 90;
+
+          ctx.drawImage(
+            canvas,
+            0, y, canvas.width, h,
+            xOffset, y, canvas.width, h
+          );
+        }
+
+        if (Math.random() > 0.75) {
+          ctx.globalAlpha = 0.4;
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, Math.random() * canvas.height, canvas.width, 4);
+          ctx.globalAlpha = 1;
+        }
       }
     }
 
     function drawLoop() {
       t++;
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
       if (video.readyState >= 2) {
-        workCtx.clearRect(0, 0, workCanvas.width, workCanvas.height);
-        drawCover(video, workCtx, workCanvas.width, workCanvas.height, true);
+        baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
+        drawCover(video, baseCtx, baseCanvas.width, baseCanvas.height, true);
 
-        if (currentEffect === "normal") renderNormal();
-        if (currentEffect === "rgb") renderRgb();
-        if (currentEffect === "glitch") renderGlitch();
-        if (currentEffect === "mirror") renderMirror();
-        if (currentEffect === "wave") renderWave();
+        if (activeEffects.has("mirror")) applyMirror();
+        if (activeEffects.has("wave")) applyWave();
+
+        drawToMain();
       } else {
         ctx.fillStyle = "#000";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#fff";
         ctx.font = "28px system-ui";
         ctx.fillText("カメラ開始を押してください", 40, 60);
+        ctx.font = "18px system-ui";
+        ctx.fillText("1 RGB / 2 Glitch / 3 Mirror / 4 Wave / 0 Clear / F Fullscreen", 40, 96);
       }
 
       requestAnimationFrame(drawLoop);
