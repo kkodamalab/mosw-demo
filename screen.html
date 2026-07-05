@@ -30,566 +30,449 @@
       background: #000;
     }
 
-    #cameraVideo {
+    video {
       display: none;
     }
 
-    .emoji {
+    #message {
       position: absolute;
+      top: 34px;
+      left: 42px;
+      z-index: 4;
+      color: #fff;
+      font-size: 26px;
+      font-weight: 700;
       pointer-events: none;
-      animation: floatUp 3s ease-out forwards;
-      text-shadow: 0 0 22px rgba(255,255,255,.9), 0 0 44px rgba(255,255,255,.5);
-      z-index: 10;
-      transform: translate(-50%, -50%);
+    }
+
+    #hint {
+      position: absolute;
+      top: 74px;
+      left: 42px;
+      z-index: 4;
+      color: #fff;
+      font-size: 17px;
+      pointer-events: none;
     }
 
     #controls {
       position: fixed;
-      left: 16px;
-      bottom: 16px;
-      z-index: 9999;
+      left: 18px;
+      bottom: 14px;
+      z-index: 10;
       display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.35);
+      color: white;
+      font-size: 12px;
+      user-select: none;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
       gap: 8px;
       flex-wrap: wrap;
-      max-width: 90vw;
+    }
+
+    button, select, input {
+      font-size: 13px;
     }
 
     button {
-      padding: 9px 12px;
-      border: none;
-      border-radius: 10px;
-      background: rgba(255,255,255,.85);
+      border: 0;
+      border-radius: 9px;
+      padding: 9px 13px;
+      background: #ddd;
       color: #111;
-      font-size: 14px;
       cursor: pointer;
     }
 
     button.active {
-      background: #00e5ff;
+      background: #00d084;
       color: #000;
       font-weight: 700;
     }
 
-    #syncBtn.active {
-      background: #ff2bd6;
-      color: #fff;
-      font-weight: 800;
+    select {
+      height: 34px;
+      border-radius: 8px;
+      padding: 4px;
     }
 
-    body.event-mode #controls,
-    body.event-mode #debug {
-      display: none;
+    input[type="range"] {
+      width: 120px;
     }
 
-    #debug {
-      position: fixed;
-      left: 12px;
-      top: 12px;
-      z-index: 9999;
-      color: #0f0;
-      background: rgba(0,0,0,.75);
-      font: 13px monospace;
-      padding: 8px;
-      white-space: pre-wrap;
-      display: none;
+    .mini-label {
+      opacity: 0.9;
+      font-size: 12px;
     }
 
-    body.debug-mode #debug {
-      display: block;
+    .emoji {
+      position: absolute;
+      z-index: 5;
+      pointer-events: none;
+      animation: fly 2.8s ease-out forwards;
+      filter: drop-shadow(0 0 8px rgba(255,255,255,0.8));
     }
 
-    @keyframes floatUp {
+    @keyframes fly {
       0% {
+        transform: translateY(0) scale(0.5) rotate(0deg);
         opacity: 0;
-        transform: translate(-50%, -50%) translateY(40px) scale(.7) rotate(-10deg);
       }
-      18% {
+      15% {
         opacity: 1;
       }
-      55% {
-        transform: translate(-50%, -50%) translateY(-35px) scale(1.2) rotate(10deg);
-      }
       100% {
+        transform: translateY(-65vh) scale(1.9) rotate(360deg);
         opacity: 0;
-        transform: translate(-50%, -50%) translateY(-180px) scale(1.8) rotate(-6deg);
       }
     }
   </style>
 </head>
-
 <body>
   <div id="screen">
     <canvas id="vjCanvas"></canvas>
-    <video id="cameraVideo" autoplay playsinline muted></video>
-  </div>
+    <video id="cameraA" autoplay playsinline muted></video>
+    <video id="cameraB" autoplay playsinline muted></video>
 
-  <div id="controls">
-    <button id="startCameraBtn">カメラ開始</button>
-    <button id="syncBtn">SYNC OFF</button>
-    <button id="clearEffectsBtn">0 Clear</button>
-    <button data-effect="rgb">1 RGB</button>
-    <button data-effect="glitch">2 Glitch</button>
-    <button data-effect="mirror">3 Mirror</button>
-    <button data-effect="wave">4 Wave</button>
-  </div>
+    <div id="message">カメラ開始を押してください</div>
+    <div id="hint">1 RGB / 2 Glitch / 3 Mirror / 4 Wave / 0 Clear / S Sync / F Fullscreen</div>
 
-  <div id="debug">起動中...</div>
+    <div id="controls">
+      <div class="control-row">
+        <button id="startBtn">カメラ開始</button>
+        <button class="camBtn active" data-mode="A">A</button>
+        <button class="camBtn" data-mode="B">B</button>
+        <button class="camBtn" data-mode="split">Split</button>
+        <button class="camBtn" data-mode="overlay">Overlay</button>
+        <button class="camBtn" data-mode="pip">PiP</button>
+        <span class="mini-label">Cam A</span><select id="camSelectA"></select>
+        <span class="mini-label">Cam B</span><select id="camSelectB"></select>
+        <span class="mini-label">Split</span><input id="splitSlider" type="range" min="10" max="90" value="50">
+        <span id="splitLabel">5:5</span>
+      </div>
+
+      <div class="control-row">
+        <button id="syncBtn">SYNC OFF</button>
+        <button class="fxBtn active" data-fx="clear">0 Clear</button>
+        <button class="fxBtn" data-fx="rgb">1 RGB</button>
+        <button class="fxBtn" data-fx="glitch">2 Glitch</button>
+        <button class="fxBtn" data-fx="mirror">3 Mirror</button>
+        <button class="fxBtn" data-fx="wave">4 Wave</button>
+        <span class="mini-label">Power</span><input id="powerSlider" type="range" min="0" max="100" value="55">
+      </div>
+    </div>
+  </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, onChildAdded, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getDatabase, ref, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
     const firebaseConfig = {
-      apiKey: "AIzaSyAaqSeyjtG7Y0CbhAITOjjP5lvAAbk2-k",
+      apiKey: "AIzaSyD4rBlSp7clQ6Gh_vfSjqiDL-l6fdJsdIM",
       authDomain: "mosw-f855e.firebaseapp.com",
       databaseURL: "https://mosw-f855e-default-rtdb.asia-southeast1.firebasedatabase.app",
       projectId: "mosw-f855e",
-      storageBucket: "mosw-f855e.firebasestorage.app",
-      messagingSenderId: "1093592474312",
-      appId: "1:1093592474312:web:76370050415013cf9bbbfd"
+      storageBucket: "mosw-f855e.appspot.com",
+      messagingSenderId: "509800323386",
+      appId: "1:509800323386:web:4c43a1e9b7a8e9b0f6b3b4"
     };
-
-    const params = new URLSearchParams(window.location.search);
-    const isEventMode = params.get("mode") === "event";
-    const isDebugMode = params.get("debug") === "1";
-
-    if (isEventMode) document.body.classList.add("event-mode");
-    if (isDebugMode) document.body.classList.add("debug-mode");
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    const screen = document.getElementById("screen");
     const canvas = document.getElementById("vjCanvas");
-    const ctx = canvas.getContext("2d");
-    const video = document.getElementById("cameraVideo");
-    const debug = document.getElementById("debug");
-    const startCameraBtn = document.getElementById("startCameraBtn");
+    const ctx = canvas.getContext("2d", { alpha: false });
+
+    const videoA = document.getElementById("cameraA");
+    const videoB = document.getElementById("cameraB");
+
+    const startBtn = document.getElementById("startBtn");
     const syncBtn = document.getElementById("syncBtn");
-    const clearEffectsBtn = document.getElementById("clearEffectsBtn");
-    const effectButtons = document.querySelectorAll("[data-effect]");
+    const camSelectA = document.getElementById("camSelectA");
+    const camSelectB = document.getElementById("camSelectB");
+    const splitSlider = document.getElementById("splitSlider");
+    const splitLabel = document.getElementById("splitLabel");
+    const powerSlider = document.getElementById("powerSlider");
+    const message = document.getElementById("message");
 
-    const baseCanvas = document.createElement("canvas");
-    const baseCtx = baseCanvas.getContext("2d");
-
-    const tempCanvas = document.createElement("canvas");
-    const tempCtx = tempCanvas.getContext("2d");
-
-    let activeEffects = new Set();
-    let cameraStream = null;
+    let streamA = null;
+    let streamB = null;
+    let camMode = "A";
+    let fx = "clear";
+    let split = 0.5;
+    let power = 0.55;
+    let sync = false;
     let t = 0;
 
-    let syncOn = false;
-    let audioCtx = null;
-    let analyser = null;
-    let audioData = null;
-    let micStream = null;
-
-    let bassEnergy = 0;
-    let bassAvg = 0;
-    let beatPulse = 0;
-    let lastBeatTime = 0;
-    let estimatedBpm = 0;
-    let beatIntervals = [];
-
-    function log(msg) {
-      console.log(msg);
-      debug.textContent = msg;
-    }
-
     function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      baseCanvas.width = 640;
-      baseCanvas.height = 360;
-      tempCanvas.width = 640;
-      tempCanvas.height = 360;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      canvas.style.width = window.innerWidth + "px";
+      canvas.style.height = window.innerHeight + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
-    async function startCamera() {
+    async function listCameras() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === "videoinput");
+
+      camSelectA.innerHTML = "";
+      camSelectB.innerHTML = "";
+
+      cams.forEach((cam, i) => {
+        const label = cam.label || `Camera ${i + 1}`;
+
+        const a = document.createElement("option");
+        a.value = cam.deviceId;
+        a.textContent = label;
+        camSelectA.appendChild(a);
+
+        const b = document.createElement("option");
+        b.value = cam.deviceId;
+        b.textContent = label;
+        camSelectB.appendChild(b);
+      });
+
+      if (cams[1]) camSelectB.selectedIndex = 1;
+    }
+
+    async function startCamera(video, oldStream, deviceId) {
+      if (oldStream) oldStream.getTracks().forEach(t => t.stop());
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          deviceId: deviceId ? { exact: deviceId } : undefined,
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 30, max: 30 }
+        },
+        audio: false
+      });
+
+      video.srcObject = stream;
+      await video.play();
+      return stream;
+    }
+
+    async function startAllCameras() {
+      await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      await listCameras();
+
+      streamA = await startCamera(videoA, streamA, camSelectA.value);
+      streamB = await startCamera(videoB, streamB, camSelectB.value);
+
+      startBtn.textContent = "カメラON";
+      message.style.display = "none";
+    }
+
+    startBtn.onclick = async () => {
       try {
-        cameraStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: "environment"
-          },
-          audio: false
-        });
-
-        video.srcObject = cameraStream;
-        await video.play();
-        startCameraBtn.textContent = "カメラON";
-        log("カメラON。0〜4キーでエフェクトON/OFF。SでSYNC。");
+        await startAllCameras();
       } catch (e) {
-        log("カメラ起動エラー: " + e.message);
+        alert("カメラ起動に失敗しました: " + e.message);
       }
-    }
+    };
 
-    startCameraBtn.addEventListener("click", startCamera);
+    camSelectA.onchange = async () => {
+      streamA = await startCamera(videoA, streamA, camSelectA.value);
+    };
 
-    async function startSync() {
-      try {
-        micStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false
-          },
-          video: false
-        });
+    camSelectB.onchange = async () => {
+      streamB = await startCamera(videoB, streamB, camSelectB.value);
+    };
 
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioCtx.createMediaStreamSource(micStream);
-
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 2048;
-        analyser.smoothingTimeConstant = 0.75;
-
-        audioData = new Uint8Array(analyser.frequencyBinCount);
-        source.connect(analyser);
-
-        syncOn = true;
-        syncBtn.classList.add("active");
-        syncBtn.textContent = "SYNC ON";
-
-        log("SYNC ON。Glitch/WaveがONの時、低音ピークに同期します。");
-      } catch (e) {
-        log("SYNC起動エラー: " + e.message);
-      }
-    }
-
-    function stopSync() {
-      syncOn = false;
-
-      if (micStream) {
-        micStream.getTracks().forEach(track => track.stop());
-        micStream = null;
-      }
-
-      if (audioCtx) {
-        audioCtx.close();
-        audioCtx = null;
-      }
-
-      analyser = null;
-      audioData = null;
-      beatPulse = 0;
-      bassEnergy = 0;
-      bassAvg = 0;
-      beatIntervals = [];
-      estimatedBpm = 0;
-
-      syncBtn.classList.remove("active");
-      syncBtn.textContent = "SYNC OFF";
-
-      log("SYNC OFF");
-    }
-
-    syncBtn.addEventListener("click", async () => {
-      if (syncOn) {
-        stopSync();
-      } else {
-        await startSync();
-      }
+    document.querySelectorAll(".camBtn").forEach(btn => {
+      btn.onclick = () => {
+        camMode = btn.dataset.mode;
+        document.querySelectorAll(".camBtn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+      };
     });
 
-    function updateAudioSync() {
-      if (!syncOn || !analyser || !audioData || !audioCtx) {
-        beatPulse *= 0.9;
-        return;
-      }
+    document.querySelectorAll(".fxBtn").forEach(btn => {
+      btn.onclick = () => setFx(btn.dataset.fx);
+    });
 
-      analyser.getByteFrequencyData(audioData);
-
-      const sampleRate = audioCtx.sampleRate;
-      const binHz = sampleRate / analyser.fftSize;
-
-      const lowMin = 50;
-      const lowMax = 180;
-
-      let sum = 0;
-      let count = 0;
-
-      for (let i = 0; i < audioData.length; i++) {
-        const hz = i * binHz;
-        if (hz >= lowMin && hz <= lowMax) {
-          sum += audioData[i] / 255;
-          count++;
-        }
-      }
-
-      bassEnergy = count ? sum / count : 0;
-
-      if (bassAvg === 0) bassAvg = bassEnergy;
-      bassAvg = bassAvg * 0.96 + bassEnergy * 0.04;
-
-      const now = performance.now();
-      const threshold = Math.max(0.12, bassAvg * 1.45);
-      const minInterval = 260;
-
-      const isBeat = bassEnergy > threshold && now - lastBeatTime > minInterval;
-
-      if (isBeat) {
-        const interval = now - lastBeatTime;
-
-        if (lastBeatTime > 0 && interval > 300 && interval < 1200) {
-          beatIntervals.push(interval);
-          if (beatIntervals.length > 8) beatIntervals.shift();
-
-          const avgInterval = beatIntervals.reduce((a, b) => a + b, 0) / beatIntervals.length;
-          estimatedBpm = Math.round(60000 / avgInterval);
-        }
-
-        lastBeatTime = now;
-        beatPulse = 1;
-      }
-
-      beatPulse *= 0.88;
-      if (beatPulse < 0.01) beatPulse = 0;
-    }
-
-    function updateButtons() {
-      effectButtons.forEach(btn => {
-        btn.classList.toggle("active", activeEffects.has(btn.dataset.effect));
+    function setFx(nextFx) {
+      fx = nextFx;
+      document.querySelectorAll(".fxBtn").forEach(b => {
+        b.classList.toggle("active", b.dataset.fx === fx);
       });
     }
 
-    function toggleEffect(effect) {
-      if (activeEffects.has(effect)) {
-        activeEffects.delete(effect);
-      } else {
-        activeEffects.add(effect);
-      }
+    syncBtn.onclick = () => {
+      sync = !sync;
+      syncBtn.textContent = sync ? "SYNC ON" : "SYNC OFF";
+      syncBtn.classList.toggle("active", sync);
+    };
 
-      updateButtons();
-      log("Effects: " + (activeEffects.size ? [...activeEffects].join(", ") : "none"));
-    }
+    splitSlider.oninput = () => {
+      split = Number(splitSlider.value) / 100;
+      const n = Math.round(split * 10);
+      splitLabel.textContent = `${n}:${10 - n}`;
+    };
 
-    function clearEffects() {
-      activeEffects.clear();
-      updateButtons();
-      log("Effects: none");
-    }
-
-    effectButtons.forEach(btn => {
-      btn.addEventListener("click", () => toggleEffect(btn.dataset.effect));
-    });
-
-    clearEffectsBtn.addEventListener("click", clearEffects);
+    powerSlider.oninput = () => {
+      power = Number(powerSlider.value) / 100;
+    };
 
     window.addEventListener("keydown", e => {
-      if (e.key === "0") clearEffects();
-      if (e.key === "1") toggleEffect("rgb");
-      if (e.key === "2") toggleEffect("glitch");
-      if (e.key === "3") toggleEffect("mirror");
-      if (e.key === "4") toggleEffect("wave");
+      if (e.key === "0") setFx("clear");
+      if (e.key === "1") setFx("rgb");
+      if (e.key === "2") setFx("glitch");
+      if (e.key === "3") setFx("mirror");
+      if (e.key === "4") setFx("wave");
       if (e.key.toLowerCase() === "s") syncBtn.click();
-      if (e.key.toLowerCase() === "f") document.documentElement.requestFullscreen?.();
+      if (e.key.toLowerCase() === "f") document.documentElement.requestFullscreen();
     });
 
-    function drawCover(source, targetCtx, w, h, mirror = false) {
-      const vw = source.videoWidth || 1280;
-      const vh = source.videoHeight || 720;
+    function drawVideoCover(video, x, y, w, h) {
+      if (!video.videoWidth || !video.videoHeight) return;
+
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
       const scale = Math.max(w / vw, h / vh);
-      const sw = vw * scale;
-      const sh = vh * scale;
-      const x = (w - sw) / 2;
-      const y = (h - sh) / 2;
+      const sw = w / scale;
+      const sh = h / scale;
+      const sx = (vw - sw) / 2;
+      const sy = (vh - sh) / 2;
 
-      targetCtx.save();
-      if (mirror) {
-        targetCtx.translate(w, 0);
-        targetCtx.scale(-1, 1);
+      ctx.drawImage(video, sx, sy, sw, sh, x, y, w, h);
+    }
+
+    function drawBase(w, h) {
+      ctx.fillStyle = sync ? "rgba(0,0,0,0.18)" : "#000";
+      ctx.fillRect(0, 0, w, h);
+
+      if (camMode === "A") drawVideoCover(videoA, 0, 0, w, h);
+      if (camMode === "B") drawVideoCover(videoB, 0, 0, w, h);
+
+      if (camMode === "split") {
+        const leftW = w * split;
+        drawVideoCover(videoA, 0, 0, leftW, h);
+        drawVideoCover(videoB, leftW, 0, w - leftW, h);
+        ctx.fillStyle = "rgba(255,255,255,0.65)";
+        ctx.fillRect(leftW - 1, 0, 2, h);
       }
-      targetCtx.drawImage(source, x, y, sw, sh);
-      targetCtx.restore();
-    }
 
-    function copyCanvas(fromCanvas, toCtx) {
-      toCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-      toCtx.drawImage(fromCanvas, 0, 0);
-    }
-
-    function applyMirror() {
-      copyCanvas(baseCanvas, tempCtx);
-
-      baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-      baseCtx.save();
-      baseCtx.translate(baseCanvas.width, 0);
-      baseCtx.scale(-1, 1);
-      baseCtx.drawImage(tempCanvas, 0, 0);
-      baseCtx.restore();
-
-      baseCtx.globalAlpha = 0.35;
-      baseCtx.drawImage(tempCanvas, 0, 0);
-      baseCtx.globalAlpha = 1;
-    }
-
-    function applyWave() {
-      copyCanvas(baseCanvas, tempCtx);
-
-      baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-      const syncBoost = syncOn ? beatPulse : 0;
-      const sliceH = 4;
-      const amp = 18 + syncBoost * 55;
-      const speed = syncOn ? 0.13 : 0.08;
-
-      for (let y = 0; y < baseCanvas.height; y += sliceH) {
-        const offset = Math.sin(y * 0.05 + t * speed) * amp;
-        baseCtx.drawImage(
-          tempCanvas,
-          0, y, tempCanvas.width, sliceH,
-          offset, y, baseCanvas.width, sliceH
-        );
-      }
-    }
-
-    function drawToMain() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      ctx.globalCompositeOperation = "source-over";
-      ctx.globalAlpha = 1;
-      ctx.filter = "none";
-
-      ctx.drawImage(baseCanvas, 0, 0, canvas.width, canvas.height);
-
-      if (activeEffects.has("rgb")) {
-        const shift = 10 + Math.sin(t * 0.08) * 8 + beatPulse * 24;
-
-        ctx.globalCompositeOperation = "screen";
-        ctx.globalAlpha = 0.55;
-
-        ctx.filter = "sepia(1) saturate(8) hue-rotate(-40deg)";
-        ctx.drawImage(baseCanvas, shift, 0, canvas.width, canvas.height);
-
-        ctx.filter = "sepia(1) saturate(8) hue-rotate(90deg)";
-        ctx.drawImage(baseCanvas, -shift, 0, canvas.width, canvas.height);
-
-        ctx.filter = "sepia(1) saturate(8) hue-rotate(190deg)";
-        ctx.drawImage(baseCanvas, 0, shift * 0.5, canvas.width, canvas.height);
-
+      if (camMode === "overlay") {
+        drawVideoCover(videoA, 0, 0, w, h);
+        ctx.globalAlpha = 0.25 + power * 0.6;
+        drawVideoCover(videoB, 0, 0, w, h);
         ctx.globalAlpha = 1;
-        ctx.filter = "none";
+      }
+
+      if (camMode === "pip") {
+        drawVideoCover(videoA, 0, 0, w, h);
+        const pw = w * 0.3;
+        const ph = pw * 9 / 16;
+        const m = 28;
+        drawVideoCover(videoB, w - pw - m, h - ph - m, pw, ph);
+        ctx.strokeStyle = "rgba(255,255,255,0.85)";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(w - pw - m, h - ph - m, pw, ph);
+      }
+    }
+
+    function applyFx(w, h) {
+      if (fx === "clear") return;
+
+      if (fx === "rgb") {
+        const shift = 5 + power * 35;
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.45;
+        ctx.drawImage(canvas, shift, 0, w, h);
+        ctx.drawImage(canvas, -shift, 0, w, h);
+        ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = "source-over";
       }
 
-      if (activeEffects.has("glitch")) {
-        const syncBoost = syncOn ? beatPulse : 0;
-        const strips = syncOn ? Math.round(8 + syncBoost * 35) : 18;
-        const probability = syncOn ? 0.18 + syncBoost * 0.65 : 0.55;
-        const maxOffset = syncOn ? 35 + syncBoost * 180 : 90;
-
-        for (let i = 0; i < strips; i++) {
-          if (Math.random() > probability) continue;
-
-          const y = Math.random() * canvas.height;
-          const h = 8 + Math.random() * (25 + syncBoost * 80);
-          const xOffset = (Math.random() - 0.5) * maxOffset;
-
-          ctx.drawImage(
-            canvas,
-            0, y, canvas.width, h,
-            xOffset, y, canvas.width, h
-          );
-        }
-
-        if (Math.random() < 0.04 + syncBoost * 0.55) {
-          ctx.globalAlpha = 0.25 + syncBoost * 0.45;
-          ctx.fillStyle = "white";
-          ctx.fillRect(0, Math.random() * canvas.height, canvas.width, 4 + syncBoost * 12);
-          ctx.globalAlpha = 1;
+      if (fx === "glitch") {
+        const count = 8 + Math.floor(power * 32);
+        for (let i = 0; i < count; i++) {
+          const y = Math.random() * h;
+          const sh = 4 + Math.random() * 34;
+          const dx = (Math.random() - 0.5) * power * 110;
+          ctx.drawImage(canvas, 0, y, w, sh, dx, y, w, sh);
         }
       }
 
-      if (syncOn && isDebugMode) {
-        ctx.fillStyle = "rgba(0,0,0,.55)";
-        ctx.fillRect(12, 12, 260, 72);
-        ctx.fillStyle = "#00ff66";
-        ctx.font = "14px monospace";
-        ctx.fillText("SYNC ON", 24, 36);
-        ctx.fillText("Bass: " + bassEnergy.toFixed(3), 24, 56);
-        ctx.fillText("BPM: " + (estimatedBpm || "--"), 24, 76);
+      if (fx === "mirror") {
+        ctx.save();
+        ctx.globalAlpha = 0.35 + power * 0.5;
+        ctx.translate(w, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(canvas, 0, 0, w, h);
+        ctx.restore();
+      }
+
+      if (fx === "wave") {
+        const temp = document.createElement("canvas");
+        temp.width = w;
+        temp.height = h;
+        const tctx = temp.getContext("2d");
+        tctx.drawImage(canvas, 0, 0, w, h);
+
+        const amp = 4 + power * 28;
+        const freq = 0.012 + power * 0.018;
+        const slice = 6;
+
+        for (let y = 0; y < h; y += slice) {
+          const dx = Math.sin(y * freq + t) * amp;
+          ctx.drawImage(temp, 0, y, w, slice, dx, y, w, slice);
+        }
       }
     }
 
-    function drawLoop() {
-      t++;
+    function loop() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      t += 0.05;
 
-      updateAudioSync();
+      drawBase(w, h);
+      applyFx(w, h);
 
-      if (video.readyState >= 2) {
-        baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
-        drawCover(video, baseCtx, baseCanvas.width, baseCanvas.height, true);
-
-        if (activeEffects.has("mirror")) applyMirror();
-        if (activeEffects.has("wave")) applyWave();
-
-        drawToMain();
-      } else {
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#fff";
-        ctx.font = "28px system-ui";
-        ctx.fillText("カメラ開始を押してください", 40, 60);
-        ctx.font = "18px system-ui";
-        ctx.fillText("1 RGB / 2 Glitch / 3 Mirror / 4 Wave / 0 Clear / S Sync / F Fullscreen", 40, 96);
-      }
-
-      requestAnimationFrame(drawLoop);
+      requestAnimationFrame(loop);
     }
 
-    drawLoop();
-
-    function showEmoji(emoji, x, y) {
+    function spawnEmoji(char) {
       const el = document.createElement("div");
       el.className = "emoji";
-      el.textContent = emoji;
-
-      const safeX = Math.min(Math.max(x, 0), 1);
-      const safeY = Math.min(Math.max(y, 0), 1);
-
-      el.style.left = `${safeX * window.innerWidth}px`;
-      el.style.top = `${safeY * window.innerHeight}px`;
-
-      const size = 72 + Math.random() * 54;
-      el.style.fontSize = `${size}px`;
-
-      screen.appendChild(el);
-
-      setTimeout(() => {
-        el.remove();
-      }, 3000);
+      el.textContent = char;
+      el.style.fontSize = 36 + Math.random() * 70 + "px";
+      el.style.left = Math.random() * 92 + "vw";
+      el.style.bottom = "-10vh";
+      document.getElementById("screen").appendChild(el);
+      setTimeout(() => el.remove(), 3000);
     }
 
-    try {
-      const reactionsRef = ref(db, "reactions");
+    function normalizeEmojiPayload(data) {
+      if (!data) return [];
+      if (Array.isArray(data.emojis)) return data.emojis;
+      if (typeof data.emoji === "string") return [data.emoji];
+      if (typeof data === "string") return [data];
+      return [];
+    }
 
-      const snapshot = await get(reactionsRef);
-      log(snapshot.exists() ? "既存データあり。新規送信を待機中..." : "reactionsは空。スマホから送信してください。");
-
-      onChildAdded(reactionsRef, snapshot => {
-        const data = snapshot.val();
-
-        if (!data || !data.emoji) return;
-
-        log("受信: " + JSON.stringify(data));
-
-        if (typeof data.x === "number" && typeof data.y === "number") {
-          showEmoji(data.emoji, data.x, data.y);
-        } else {
-          showEmoji(data.emoji, Math.random(), Math.random());
-        }
+    onChildAdded(ref(db, "reactions"), snapshot => {
+      const emojis = normalizeEmojiPayload(snapshot.val());
+      emojis.slice(0, 15).forEach((e, i) => {
+        setTimeout(() => spawnEmoji(e), i * 70);
       });
+    });
 
-    } catch (e) {
-      log("Firebase読取エラー: " + e.message);
-    }
+    loop();
   </script>
 </body>
 </html>
