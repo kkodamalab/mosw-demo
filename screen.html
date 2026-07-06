@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>MOSW Avatar Effects</title>
+  <title>MOSW VJ Screen</title>
   <style>
     html, body {
       margin: 0;
@@ -17,375 +17,640 @@
       position: relative;
       width: 100vw;
       height: 100vh;
-      background: #000;
       overflow: hidden;
+      background: #000;
     }
 
-    video {
-      display: none;
-    }
-
-    canvas {
+    #vjCanvas {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
+      z-index: 0;
+      background: #000;
     }
 
-    #ui {
+    video { display: none; }
+
+    #message {
       position: absolute;
-      left: 50%;
-      bottom: 22px;
-      transform: translateX(-50%);
+      top: 34px;
+      left: 42px;
+      z-index: 4;
+      color: #fff;
+      font-size: 26px;
+      font-weight: 700;
+      pointer-events: none;
+    }
+
+    #gestureStatus {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 20;
+      color: white;
+      font-size: 12px;
+      opacity: 0.75;
+      background: rgba(0,0,0,0.35);
+      padding: 7px 10px;
+      border-radius: 10px;
+    }
+
+    #controls {
+      position: fixed;
+      left: 18px;
+      bottom: 14px;
       z-index: 10;
       display: flex;
+      flex-direction: column;
       gap: 8px;
-      flex-wrap: wrap;
-      justify-content: center;
-      width: min(96vw, 900px);
-      pointer-events: auto;
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.35);
+      color: white;
+      font-size: 12px;
+      user-select: none;
     }
 
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button, select, input { font-size: 13px; }
+
     button {
-      border: 1px solid rgba(255,255,255,0.28);
-      background: rgba(0,0,0,0.48);
-      color: white;
-      border-radius: 999px;
-      padding: 10px 14px;
-      font-size: 14px;
-      backdrop-filter: blur(8px);
+      border: 0;
+      border-radius: 9px;
+      padding: 9px 13px;
+      background: #ddd;
+      color: #111;
       cursor: pointer;
     }
 
     button.active {
-      background: rgba(0, 255, 220, 0.28);
-      border-color: rgba(0, 255, 220, 0.85);
-      box-shadow: 0 0 18px rgba(0, 255, 220, 0.45);
+      background: #00d084;
+      color: #000;
+      font-weight: 700;
     }
 
-    #startBtn {
+    select {
+      height: 34px;
+      border-radius: 8px;
+      padding: 4px;
+    }
+
+    input[type="range"] { width: 120px; }
+
+    .mini-label {
+      opacity: 0.9;
+      font-size: 12px;
+    }
+
+    .emoji {
       position: absolute;
-      z-index: 20;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 18px;
-      padding: 14px 24px;
+      z-index: 5;
+      pointer-events: none;
+      animation: fly 2.8s ease-out forwards;
+      filter: drop-shadow(0 0 8px rgba(255,255,255,0.8));
+    }
+
+    @keyframes fly {
+      0% { transform: translateY(0) scale(0.5) rotate(0deg); opacity: 0; }
+      15% { opacity: 1; }
+      100% { transform: translateY(-65vh) scale(1.9) rotate(360deg); opacity: 0; }
     }
   </style>
 </head>
 
 <body>
   <div id="screen">
-    <video id="video" playsinline></video>
-    <canvas id="canvas"></canvas>
+    <canvas id="vjCanvas"></canvas>
+    <video id="cameraA" autoplay playsinline muted></video>
+    <video id="cameraB" autoplay playsinline muted></video>
 
-    <button id="startBtn">CAMERA ON</button>
+    <div id="message">カメラ開始を押してください</div>
+    <div id="gestureStatus">Hand: OFF</div>
 
-    <div id="ui">
-      <button data-mode="mesh" class="active">Mesh</button>
-      <button data-mode="metal">Metallic</button>
-      <button data-mode="beer">Beer Bubble</button>
-      <button data-mode="dot">Dot</button>
-      <button data-mode="hologram">Hologram</button>
-      <button data-mode="aura">Aura</button>
+    <div id="controls">
+      <div class="control-row">
+        <button id="startBtn">カメラ開始</button>
+        <button class="camBtn active" data-mode="A">A</button>
+        <button class="camBtn" data-mode="B">B</button>
+        <button class="camBtn" data-mode="split">Split</button>
+        <button class="camBtn" data-mode="overlay">Overlay</button>
+        <button class="camBtn" data-mode="pip">PiP</button>
+        <span class="mini-label">Cam A</span><select id="camSelectA"></select>
+        <span class="mini-label">Cam B</span><select id="camSelectB"></select>
+        <span class="mini-label">Split</span><input id="splitSlider" type="range" min="10" max="90" value="50">
+        <span id="splitLabel">5:5</span>
+      </div>
+
+      <div class="control-row">
+        <button id="syncBtn">SYNC OFF</button>
+        <button id="gestureBtn" class="active">GESTURE ON</button>
+        <button id="clearFxBtn" class="active">0 Clear</button>
+        <button class="fxBtn" data-fx="rgb">1 RGB</button>
+        <button class="fxBtn" data-fx="glitch">2 Glitch</button>
+        <button class="fxBtn" data-fx="mirror">3 Mirror</button>
+        <button class="fxBtn" data-fx="wave">4 Wave</button>
+        <button class="fxBtn" data-fx="mono">5 Mono</button>
+        <button class="fxBtn" data-fx="invert">6 Invert</button>
+        <button class="fxBtn" data-fx="pixel">7 Pixel</button>
+        <button class="fxBtn" data-fx="strobe">8 Strobe</button>
+        <button class="fxBtn" data-fx="zoom">9 Zoom</button>
+        <span class="mini-label">Power</span><input id="powerSlider" type="range" min="0" max="100" value="55">
+      </div>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import {
+      HandLandmarker,
+      FilesetResolver
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
-  <script>
-    const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
+    const firebaseConfig = {
+      apiKey: "AIzaSyD4rBlSp7clQ6Gh_vfSjqiDL-l6fdJsdIM",
+      authDomain: "mosw-f855e.firebaseapp.com",
+      databaseURL: "https://mosw-f855e-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "mosw-f855e",
+      storageBucket: "mosw-f855e.appspot.com",
+      messagingSenderId: "509800323386",
+      appId: "1:509800323386:web:4c43a1e9b7a8e9b0f6b3b4"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const canvas = document.getElementById("vjCanvas");
+    const ctx = canvas.getContext("2d", { alpha: false });
+
+    const videoA = document.getElementById("cameraA");
+    const videoB = document.getElementById("cameraB");
     const startBtn = document.getElementById("startBtn");
-    const buttons = document.querySelectorAll("#ui button");
+    const syncBtn = document.getElementById("syncBtn");
+    const gestureBtn = document.getElementById("gestureBtn");
+    const clearFxBtn = document.getElementById("clearFxBtn");
+    const camSelectA = document.getElementById("camSelectA");
+    const camSelectB = document.getElementById("camSelectB");
+    const splitSlider = document.getElementById("splitSlider");
+    const splitLabel = document.getElementById("splitLabel");
+    const powerSlider = document.getElementById("powerSlider");
+    const message = document.getElementById("message");
+    const gestureStatus = document.getElementById("gestureStatus");
 
-    let mode = "mesh";
-    let landmarks = null;
+    let streamA = null;
+    let streamB = null;
+    let camMode = "A";
+    let activeFx = new Set();
+    let split = 0.5;
+    let power = 0.55;
+    let sync = false;
+    let gestureEnabled = true;
     let t = 0;
-    let particles = [];
+    let frame = 0;
 
-    const POSE_CONNECTIONS = [
-      [11,12], [11,13], [13,15], [12,14], [14,16],
-      [11,23], [12,24], [23,24],
-      [23,25], [25,27], [24,26], [26,28],
-      [27,29], [29,31], [28,30], [30,32],
-      [15,17], [15,19], [15,21],
-      [16,18], [16,20], [16,22]
-    ];
+    let handLandmarker = null;
+    let lastGesture = "";
+    let lastGestureTime = 0;
 
-    buttons.forEach(btn => {
+    const fxBuffer = document.createElement("canvas");
+    const fxCtx = fxBuffer.getContext("2d");
+
+    function resizeCanvas() {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      canvas.style.width = window.innerWidth + "px";
+      canvas.style.height = window.innerHeight + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    async function initHands() {
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        numHands: 2
+      });
+
+      gestureStatus.textContent = gestureEnabled ? "Hand: ON" : "Hand: OFF";
+    }
+
+    async function listCameras() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === "videoinput");
+
+      camSelectA.innerHTML = "";
+      camSelectB.innerHTML = "";
+
+      cams.forEach((cam, i) => {
+        const label = cam.label || `Camera ${i + 1}`;
+        const a = document.createElement("option");
+        a.value = cam.deviceId;
+        a.textContent = label;
+        camSelectA.appendChild(a);
+
+        const b = document.createElement("option");
+        b.value = cam.deviceId;
+        b.textContent = label;
+        camSelectB.appendChild(b);
+      });
+
+      if (cams[1]) camSelectB.selectedIndex = 1;
+    }
+
+    async function startCamera(video, oldStream, deviceId) {
+      if (oldStream) oldStream.getTracks().forEach(t => t.stop());
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          deviceId: deviceId ? { exact: deviceId } : undefined,
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 30, max: 30 }
+        },
+        audio: false
+      });
+
+      video.srcObject = stream;
+      await video.play();
+      return stream;
+    }
+
+    async function startAllCameras() {
+      await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      await listCameras();
+
+      streamA = await startCamera(videoA, streamA, camSelectA.value);
+      streamB = await startCamera(videoB, streamB, camSelectB.value);
+
+      if (!handLandmarker) await initHands();
+
+      startBtn.textContent = "カメラON";
+      message.style.display = "none";
+    }
+
+    startBtn.onclick = async () => {
+      try {
+        await startAllCameras();
+      } catch (e) {
+        alert("カメラ起動に失敗しました: " + e.message);
+        console.error(e);
+      }
+    };
+
+    camSelectA.onchange = async () => {
+      streamA = await startCamera(videoA, streamA, camSelectA.value);
+    };
+
+    camSelectB.onchange = async () => {
+      streamB = await startCamera(videoB, streamB, camSelectB.value);
+    };
+
+    document.querySelectorAll(".camBtn").forEach(btn => {
       btn.onclick = () => {
-        mode = btn.dataset.mode;
-        buttons.forEach(b => b.classList.remove("active"));
+        camMode = btn.dataset.mode;
+        document.querySelectorAll(".camBtn").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
       };
     });
 
-    function resize() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-    window.addEventListener("resize", resize);
-    resize();
-
-    const pose = new Pose({
-      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-    });
-
-    pose.setOptions({
-      modelComplexity: 1,
-      smoothLandmarks: true,
-      enableSegmentation: false,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
-
-    pose.onResults(results => {
-      landmarks = results.poseLandmarks || null;
-    });
-
-    startBtn.onclick = async () => {
-      startBtn.style.display = "none";
-
-      const camera = new Camera(video, {
-        onFrame: async () => {
-          await pose.send({ image: video });
-        },
-        width: 1280,
-        height: 720
+    function updateFxButtons() {
+      document.querySelectorAll(".fxBtn").forEach(btn => {
+        btn.classList.toggle("active", activeFx.has(btn.dataset.fx));
       });
+      clearFxBtn.classList.toggle("active", activeFx.size === 0);
+    }
 
-      camera.start();
-      animate();
+    function toggleFx(nextFx) {
+      activeFx.has(nextFx) ? activeFx.delete(nextFx) : activeFx.add(nextFx);
+      updateFxButtons();
+    }
+
+    function clearFx() {
+      activeFx.clear();
+      updateFxButtons();
+    }
+
+    document.querySelectorAll(".fxBtn").forEach(btn => {
+      btn.onclick = () => toggleFx(btn.dataset.fx);
+    });
+
+    clearFxBtn.onclick = clearFx;
+
+    syncBtn.onclick = () => {
+      sync = !sync;
+      syncBtn.textContent = sync ? "SYNC ON" : "SYNC OFF";
+      syncBtn.classList.toggle("active", sync);
     };
 
-    function p(lm) {
-      return {
-        x: (1 - lm.x) * canvas.width,
-        y: lm.y * canvas.height,
-        z: lm.z || 0,
-        v: lm.visibility ?? 1
-      };
+    gestureBtn.onclick = () => {
+      gestureEnabled = !gestureEnabled;
+      gestureBtn.textContent = gestureEnabled ? "GESTURE ON" : "GESTURE OFF";
+      gestureBtn.classList.toggle("active", gestureEnabled);
+      gestureStatus.textContent = gestureEnabled ? "Hand: ON" : "Hand: OFF";
+    };
+
+    splitSlider.oninput = () => {
+      split = Number(splitSlider.value) / 100;
+      const n = Math.round(split * 10);
+      splitLabel.textContent = `${n}:${10 - n}`;
+    };
+
+    powerSlider.oninput = () => {
+      power = Number(powerSlider.value) / 100;
+    };
+
+    window.addEventListener("keydown", e => {
+      if (e.key === "0") clearFx();
+      if (e.key === "1") toggleFx("rgb");
+      if (e.key === "2") toggleFx("glitch");
+      if (e.key === "3") toggleFx("mirror");
+      if (e.key === "4") toggleFx("wave");
+      if (e.key === "5") toggleFx("mono");
+      if (e.key === "6") toggleFx("invert");
+      if (e.key === "7") toggleFx("pixel");
+      if (e.key === "8") toggleFx("strobe");
+      if (e.key === "9") toggleFx("zoom");
+      if (e.key.toLowerCase() === "s") syncBtn.click();
+      if (e.key.toLowerCase() === "g") gestureBtn.click();
+      if (e.key.toLowerCase() === "f") document.documentElement.requestFullscreen();
+    });
+
+    function drawVideoCover(video, x, y, w, h) {
+      if (!video.videoWidth || !video.videoHeight) return;
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const scale = Math.max(w / vw, h / vh);
+      const sw = w / scale;
+      const sh = h / scale;
+      const sx = (vw - sw) / 2;
+      const sy = (vh - sh) / 2;
+      ctx.drawImage(video, sx, sy, sw, sh, x, y, w, h);
     }
 
-    function getPoints() {
-      if (!landmarks) return [];
-      return landmarks.map(p);
-    }
+    function drawBase(w, h) {
+      ctx.fillStyle = sync ? "rgba(0,0,0,0.18)" : "#000";
+      ctx.fillRect(0, 0, w, h);
 
-    function clear() {
-      ctx.fillStyle = "rgba(0,0,0,0.24)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+      if (camMode === "A") drawVideoCover(videoA, 0, 0, w, h);
+      if (camMode === "B") drawVideoCover(videoB, 0, 0, w, h);
 
-    function drawVideoGhost() {
-      ctx.save();
-      ctx.globalAlpha = 0.16;
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
-    }
-
-    function drawSkeleton(points, color = "#00ffe0", width = 2) {
-      ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width;
-      ctx.shadowBlur = 18;
-      ctx.shadowColor = color;
-
-      for (const [a, b] of POSE_CONNECTIONS) {
-        if (!points[a] || !points[b]) continue;
-        if (points[a].v < 0.35 || points[b].v < 0.35) continue;
-        ctx.beginPath();
-        ctx.moveTo(points[a].x, points[a].y);
-        ctx.lineTo(points[b].x, points[b].y);
-        ctx.stroke();
+      if (camMode === "split") {
+        const leftW = w * split;
+        drawVideoCover(videoA, 0, 0, leftW, h);
+        drawVideoCover(videoB, leftW, 0, w - leftW, h);
+        ctx.fillStyle = "rgba(255,255,255,0.65)";
+        ctx.fillRect(leftW - 1, 0, 2, h);
       }
 
-      for (const pt of points) {
-        if (pt.v < 0.35) continue;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-      }
-      ctx.restore();
-    }
-
-    function drawMesh(points) {
-      drawSkeleton(points, "#00ffe0", 2);
-
-      ctx.save();
-      ctx.strokeStyle = "rgba(0,255,220,0.25)";
-      ctx.lineWidth = 1;
-
-      for (let i = 0; i < points.length; i++) {
-        for (let j = i + 1; j < points.length; j++) {
-          const a = points[i], b = points[j];
-          if (a.v < 0.45 || b.v < 0.45) continue;
-          const d = Math.hypot(a.x - b.x, a.y - b.y);
-          if (d < 150) {
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
-            ctx.stroke();
-          }
-        }
-      }
-      ctx.restore();
-    }
-
-    function drawMetal(points) {
-      ctx.save();
-      ctx.lineCap = "round";
-      const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      g.addColorStop(0, "#ffffff");
-      g.addColorStop(0.35, "#777777");
-      g.addColorStop(0.65, "#d8d8d8");
-      g.addColorStop(1, "#444444");
-
-      ctx.shadowBlur = 24;
-      ctx.shadowColor = "rgba(255,255,255,0.7)";
-      drawSkeleton(points, g, 10);
-
-      ctx.globalAlpha = 0.45;
-      drawSkeleton(points, "#ffffff", 2);
-      ctx.restore();
-    }
-
-    function drawBeer(points) {
-      drawSkeleton(points, "rgba(255,190,40,0.55)", 3);
-
-      for (const pt of points) {
-        if (pt.v < 0.4) continue;
-        for (let i = 0; i < 3; i++) {
-          particles.push({
-            x: pt.x + (Math.random() - 0.5) * 28,
-            y: pt.y + (Math.random() - 0.5) * 28,
-            vx: (Math.random() - 0.5) * 1.2,
-            vy: -Math.random() * 2.2 - 0.4,
-            r: Math.random() * 8 + 3,
-            life: 80,
-            color: Math.random() > 0.35 ? "rgba(255,230,150," : "rgba(255,170,30,"
-          });
-        }
+      if (camMode === "overlay") {
+        drawVideoCover(videoA, 0, 0, w, h);
+        ctx.globalAlpha = 0.25 + power * 0.6;
+        drawVideoCover(videoB, 0, 0, w, h);
+        ctx.globalAlpha = 1;
       }
 
-      drawParticles();
-    }
-
-    function drawDot(points) {
-      ctx.save();
-      ctx.fillStyle = "#00f7ff";
-      ctx.shadowBlur = 14;
-      ctx.shadowColor = "#00f7ff";
-
-      for (const [a, b] of POSE_CONNECTIONS) {
-        const pa = points[a], pb = points[b];
-        if (!pa || !pb || pa.v < 0.4 || pb.v < 0.4) continue;
-
-        const steps = 18;
-        for (let i = 0; i <= steps; i++) {
-          const r = i / steps;
-          const x = pa.x + (pb.x - pa.x) * r;
-          const y = pa.y + (pb.y - pa.y) * r;
-          ctx.beginPath();
-          ctx.arc(x, y, 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
+      if (camMode === "pip") {
+        drawVideoCover(videoA, 0, 0, w, h);
+        const pw = w * 0.3;
+        const ph = pw * 9 / 16;
+        const m = 28;
+        drawVideoCover(videoB, w - pw - m, h - ph - m, pw, ph);
+        ctx.strokeStyle = "rgba(255,255,255,0.85)";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(w - pw - m, h - ph - m, pw, ph);
       }
-      ctx.restore();
     }
 
-    function drawHologram(points) {
-      ctx.save();
-      ctx.globalAlpha = 0.95;
+    function applyFx(w, h) {
+      if (activeFx.size === 0) return;
 
-      for (let offset of [-8, 0, 8]) {
+      if (activeFx.has("rgb")) {
+        const shift = 5 + power * 35;
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.45;
+        ctx.drawImage(canvas, shift, 0, w, h);
+        ctx.drawImage(canvas, -shift, 0, w, h);
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "source-over";
+      }
+
+      if (activeFx.has("mirror")) {
         ctx.save();
-        ctx.translate(offset, 0);
-        drawSkeleton(points, offset === 0 ? "#00fff0" : "rgba(255,0,180,0.45)", 2);
+        ctx.globalAlpha = 0.35 + power * 0.5;
+        ctx.translate(w, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(canvas, 0, 0, w, h);
         ctx.restore();
       }
 
-      ctx.strokeStyle = "rgba(0,255,240,0.18)";
-      ctx.lineWidth = 1;
-      for (let y = 0; y < canvas.height; y += 14) {
-        ctx.beginPath();
-        ctx.moveTo(0, y + Math.sin(t * 0.04 + y * 0.03) * 8);
-        ctx.lineTo(canvas.width, y);
-        ctx.stroke();
+      if (activeFx.has("wave")) {
+        fxBuffer.width = w;
+        fxBuffer.height = h;
+        fxCtx.drawImage(canvas, 0, 0, w, h);
+        const amp = 4 + power * 28;
+        const freq = 0.012 + power * 0.018;
+        for (let y = 0; y < h; y += 6) {
+          const dx = Math.sin(y * freq + t) * amp;
+          ctx.drawImage(fxBuffer, 0, y, w, 6, dx, y, w, 6);
+        }
       }
 
-      ctx.restore();
-    }
-
-    function drawAura(points) {
-      if (!points.length) return;
-
-      const visible = points.filter(pt => pt.v > 0.4);
-      if (!visible.length) return;
-
-      const cx = visible.reduce((s, pt) => s + pt.x, 0) / visible.length;
-      const cy = visible.reduce((s, pt) => s + pt.y, 0) / visible.length;
-
-      ctx.save();
-      for (let i = 0; i < 5; i++) {
-        const r = 90 + i * 55 + Math.sin(t * 0.03 + i) * 18;
-        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-        g.addColorStop(0, "rgba(0,255,180,0.10)");
-        g.addColorStop(0.55, "rgba(255,220,80,0.08)");
-        g.addColorStop(1, "rgba(255,255,255,0)");
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-
-      drawSkeleton(points, "rgba(255,255,180,0.85)", 3);
-    }
-
-    function drawParticles() {
-      ctx.save();
-      for (const q of particles) {
-        q.x += q.vx;
-        q.y += q.vy;
-        q.life--;
-
-        ctx.fillStyle = `${q.color}${q.life / 80})`;
-        ctx.beginPath();
-        ctx.arc(q.x, q.y, q.r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      particles = particles.filter(q => q.life > 0);
-      ctx.restore();
-    }
-
-    function animate() {
-      t++;
-      clear();
-      drawVideoGhost();
-
-      const points = getPoints();
-
-      if (points.length) {
-        if (mode === "mesh") drawMesh(points);
-        if (mode === "metal") drawMetal(points);
-        if (mode === "beer") drawBeer(points);
-        if (mode === "dot") drawDot(points);
-        if (mode === "hologram") drawHologram(points);
-        if (mode === "aura") drawAura(points);
-      } else {
-        drawParticles();
+      if (activeFx.has("glitch")) {
+        const glitchInterval = Math.max(5, Math.floor(16 - power * 8));
+        if (frame % glitchInterval === 0) {
+          const count = 3 + Math.floor(power * 14);
+          for (let i = 0; i < count; i++) {
+            const y = Math.random() * h;
+            const sh = 5 + Math.random() * 28;
+            const dx = (Math.random() - 0.5) * power * 90;
+            ctx.drawImage(canvas, 0, y, w, sh, dx, y, w, sh);
+          }
+        }
       }
 
-      requestAnimationFrame(animate);
+      if (activeFx.has("mono") || activeFx.has("invert")) {
+        const img = ctx.getImageData(0, 0, w, h);
+        const d = img.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i], g = d[i + 1], b = d[i + 2];
+
+          if (activeFx.has("mono")) {
+            const gray = (r + g + b) / 3;
+            d[i] = r * (1 - power) + gray * power;
+            d[i + 1] = g * (1 - power) + gray * power;
+            d[i + 2] = b * (1 - power) + gray * power;
+          }
+
+          if (activeFx.has("invert")) {
+            d[i] = d[i] * (1 - power) + (255 - d[i]) * power;
+            d[i + 1] = d[i + 1] * (1 - power) + (255 - d[i + 1]) * power;
+            d[i + 2] = d[i + 2] * (1 - power) + (255 - d[i + 2]) * power;
+          }
+        }
+        ctx.putImageData(img, 0, 0);
+      }
+
+      if (activeFx.has("pixel")) {
+        const scale = 0.04 + (1 - power) * 0.18;
+        const sw = Math.max(24, Math.floor(w * scale));
+        const sh = Math.max(18, Math.floor(h * scale));
+        fxBuffer.width = sw;
+        fxBuffer.height = sh;
+        fxCtx.imageSmoothingEnabled = false;
+        fxCtx.drawImage(canvas, 0, 0, sw, sh);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(fxBuffer, 0, 0, sw, sh, 0, 0, w, h);
+        ctx.imageSmoothingEnabled = true;
+      }
+
+      if (activeFx.has("strobe")) {
+        const flash = Math.sin(t * (1.5 + power * 5)) > 0.82;
+        if (flash) {
+          ctx.fillStyle = `rgba(255,255,255,${0.18 + power * 0.45})`;
+          ctx.fillRect(0, 0, w, h);
+        }
+      }
+
+      if (activeFx.has("zoom")) {
+        const z = 1 + power * 0.08 + Math.sin(t * 1.5) * power * 0.025;
+        fxBuffer.width = w;
+        fxBuffer.height = h;
+        fxCtx.drawImage(canvas, 0, 0, w, h);
+        ctx.globalAlpha = 0.45 + power * 0.35;
+        ctx.drawImage(fxBuffer, (w - w * z) / 2, (h - h * z) / 2, w * z, h * z);
+        ctx.globalAlpha = 1;
+      }
     }
+
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function isExtended(lm, tip, pip) {
+      return lm[tip].y < lm[pip].y;
+    }
+
+    function detectGesture(lm) {
+      const thumbTip = lm[4];
+      const indexTip = lm[8];
+      const middleTip = lm[12];
+      const ringTip = lm[16];
+      const pinkyTip = lm[20];
+
+      const indexExt = isExtended(lm, 8, 6);
+      const middleExt = isExtended(lm, 12, 10);
+      const ringExt = isExtended(lm, 16, 14);
+      const pinkyExt = isExtended(lm, 20, 18);
+
+      const okDist = dist(thumbTip, indexTip);
+      const palmSize = dist(lm[0], lm[9]);
+
+      if (okDist < palmSize * 0.38 && middleExt && ringExt && pinkyExt) return "OK";
+      if (indexExt && middleExt && !ringExt && !pinkyExt && dist(indexTip, middleTip) > palmSize * 0.35) return "PEACE";
+      if (thumbTip.y < lm[3].y && !indexExt && !middleExt && !ringExt && !pinkyExt) return "GOOD";
+      if (indexExt && middleExt && dist(indexTip, middleTip) < palmSize * 0.35) return "HEART";
+
+      return "";
+    }
+
+    function handleHands() {
+      if (!gestureEnabled) {
+        gestureStatus.textContent = "Hand: OFF";
+        return;
+      }
+
+      if (!handLandmarker || !videoA.videoWidth) return;
+      if (frame % 5 !== 0) return;
+
+      const result = handLandmarker.detectForVideo(videoA, performance.now());
+      if (!result.landmarks || result.landmarks.length === 0) {
+        gestureStatus.textContent = "Hand: ON";
+        return;
+      }
+
+      for (const lm of result.landmarks) {
+        const gesture = detectGesture(lm);
+        if (!gesture) continue;
+
+        const now = performance.now();
+        if (gesture === lastGesture && now - lastGestureTime < 1600) return;
+
+        lastGesture = gesture;
+        lastGestureTime = now;
+        gestureStatus.textContent = "Gesture: " + gesture;
+
+        if (gesture === "OK") burstEmoji("👌", 7);
+        if (gesture === "PEACE") burstEmoji("✌️", 7);
+        if (gesture === "HEART") burstEmoji("❤️", 9);
+        if (gesture === "GOOD") burstEmoji("👍", 7);
+      }
+    }
+
+    function loop() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      t += 0.05;
+      frame++;
+
+      drawBase(w, h);
+      applyFx(w, h);
+      handleHands();
+
+      requestAnimationFrame(loop);
+    }
+
+    function spawnEmoji(char) {
+      const el = document.createElement("div");
+      el.className = "emoji";
+      el.textContent = char;
+      el.style.fontSize = 36 + Math.random() * 70 + "px";
+      el.style.left = Math.random() * 92 + "vw";
+      el.style.bottom = "-10vh";
+      document.getElementById("screen").appendChild(el);
+      setTimeout(() => el.remove(), 3000);
+    }
+
+    function burstEmoji(char, n) {
+      for (let i = 0; i < n; i++) {
+        setTimeout(() => spawnEmoji(char), i * 80);
+      }
+    }
+
+    function normalizeEmojiPayload(data) {
+      if (!data) return [];
+      if (Array.isArray(data.emojis)) return data.emojis;
+      if (typeof data.emoji === "string") return [data.emoji];
+      if (typeof data === "string") return [data];
+      return [];
+    }
+
+    onChildAdded(ref(db, "reactions"), snapshot => {
+      const emojis = normalizeEmojiPayload(snapshot.val());
+      emojis.slice(0, 15).forEach((e, i) => {
+        setTimeout(() => spawnEmoji(e), i * 70);
+      });
+    });
+
+    updateFxButtons();
+    loop();
   </script>
 </body>
 </html>
