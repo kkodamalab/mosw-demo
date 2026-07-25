@@ -151,6 +151,7 @@
       <div class="control-row">
         <button id="syncBtn">SYNC OFF</button>
         <button id="gestureBtn" class="active">GESTURE ON</button>
+        <button id="faceMaskBtn" class="active">FACE ON</button>
         <button id="clearFxBtn" class="active">0 Clear</button>
         <button class="fxBtn" data-fx="rgb">1 RGB</button>
         <button class="fxBtn" data-fx="glitch">2 Glitch</button>
@@ -182,6 +183,7 @@
     import {
       HandLandmarker,
       PoseLandmarker,
+      FaceLandmarker,
       ImageSegmenter,
       FilesetResolver
     } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
@@ -207,6 +209,7 @@
     const startBtn = document.getElementById("startBtn");
     const syncBtn = document.getElementById("syncBtn");
     const gestureBtn = document.getElementById("gestureBtn");
+    const faceMaskBtn = document.getElementById("faceMaskBtn");
     const clearFxBtn = document.getElementById("clearFxBtn");
     const camSelectA = document.getElementById("camSelectA");
     const camSelectB = document.getElementById("camSelectB");
@@ -230,6 +233,7 @@
 
     let handLandmarker = null;
     let poseLandmarker = null;
+    let faceLandmarker = null;
     let selfieSegmenter = null;
     let avatarMode = "off";
     let poseResults = null;
@@ -237,6 +241,32 @@
     let lastAvatarVideoTime = -1;
     let lastGesture = "";
     let lastGestureTime = 0;
+    let faceResultsA = null;
+    let faceResultsB = null;
+    let lastFaceVideoTimeA = -1;
+    let lastFaceVideoTimeB = -1;
+
+    // ========================================
+    // FACE MASK REACTION SYSTEM
+    // ========================================
+    const faceMaskEmojis = ["😎", "🥹", "🤪", "😍", "😭", "😡", "🤡", "👽", "🤖", "👻"];
+    const FACE_MASK_DURATION = 5000;
+    const FACE_MASK_FADE_MS = 500;
+    const FACE_LOST_GRACE_PERIOD = 400;
+    const MAX_FACE_MASK_QUEUE = 30;
+    const DEBUG_FACE_MASK = false;
+    const FACE_TRACK_POSITION_SMOOTHING = 0.25;
+    const FACE_TRACK_SIZE_SMOOTHING = 0.2;
+    const FACE_TRACK_ROTATION_SMOOTHING = 0.2;
+    const FACE_MASK_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+    let faceMaskEnabled = true;
+    let faceMaskQueue = [];
+    let activeFaceMasks = [];
+    let faceTracks = new Map();
+    let nextFaceTrackId = 1;
+    let nextFaceMaskTrackIndex = 0;
+    const faceMaskBootTime = Date.now();
+    const processedFaceMaskIds = new Set();
 
     const fxBuffer = document.createElement("canvas");
     const fxCtx = fxBuffer.getContext("2d");
@@ -283,6 +313,16 @@
         },
         runningMode: "VIDEO",
         numPoses: 1
+      });
+
+      faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        numFaces: 6
       });
 
       selfieSegmenter = await ImageSegmenter.createFromOptions(vision, {
@@ -429,6 +469,10 @@
       gestureStatus.textContent = gestureEnabled ? "Hand: ON" : "Hand: OFF";
     };
 
+    faceMaskBtn.onclick = () => {
+      setFaceMaskEnabled(!faceMaskEnabled);
+    };
+
     splitSlider.oninput = () => {
       split = Number(splitSlider.value) / 100;
       const n = Math.round(split * 10);
@@ -452,6 +496,8 @@
       if (e.key === "9") toggleFx("zoom");
       if (e.key.toLowerCase() === "s") syncBtn.click();
       if (e.key.toLowerCase() === "g") gestureBtn.click();
+      // F is already used for fullscreen, so M toggles participant face masks.
+      if (e.key.toLowerCase() === "m") faceMaskBtn.click();
       if (e.key.toLowerCase() === "f") document.documentElement.requestFullscreen();
     });
 
@@ -499,6 +545,310 @@
         ctx.lineWidth = 3;
         ctx.strokeRect(w - pw - m, h - ph - m, pw, ph);
       }
+    }
+
+    // ========================================
+    // FACE MASK REACTION SYSTEM
+    // ========================================
+    function clearFaceMaskSystem() {
+      faceMaskQueue = [];
+      activeFaceMasks = [];
+    }
+
+    function setFaceMaskEnabled(nextEnabled) {
+      faceMaskEnabled = nextEnabled;
+      faceMaskBtn.textContent = faceMaskEnabled ? "FACE ON" : "FACE OFF";
+      faceMaskBtn.classList.toggle("active", faceMaskEnabled);
+      if (!faceMaskEnabled) clearFaceMaskSystem();
+    }
+
+    function getVisibleFaceFeeds(w, h) {
+      if (camMode === "A") return [{ video: videoA, id: "A", rect: { x: 0, y: 0, w, h } }];
+      if (camMode === "B") return [{ video: videoB, id: "B", rect: { x: 0, y: 0, w, h } }];
+
+      if (camMode === "split") {
+        const leftW = w * split;
+        return [
+          { video: videoA, id: "A", rect: { x: 0, y: 0, w: leftW, h } },
+          { video: videoB, id: "B", rect: { x: leftW, y: 0, w: w - leftW, h } }
+        ];
+      }
+
+      if (camMode === "overlay") {
+        return [
+          { video: videoA, id: "A", rect: { x: 0, y: 0, w, h } },
+          { video: videoB, id: "B", rect: { x: 0, y: 0, w, h } }
+        ];
+      }
+
+      if (camMode === "pip") {
+        const pw = w * 0.3;
+        const ph = pw * 9 / 16;
+        const m = 28;
+        return [
+          { video: videoA, id: "A", rect: { x: 0, y: 0, w, h } },
+          { video: videoB, id: "B", rect: { x: w - pw - m, y: h - ph - m, w: pw, h: ph } }
+        ];
+      }
+
+      return [];
+    }
+
+    function averageLandmarks(points) {
+      const sum = points.reduce((acc, point) => {
+        acc.x += point.x;
+        acc.y += point.y;
+        return acc;
+      }, { x: 0, y: 0 });
+      return {
+        x: sum.x / points.length,
+        y: sum.y / points.length
+      };
+    }
+
+    function smoothAngle(prev, next, amount) {
+      if (prev == null) return next;
+      let delta = next - prev;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      return prev + delta * amount;
+    }
+
+    function mapVideoPointToCanvas(normalizedX, normalizedY, video, rect) {
+      if (!video || !video.videoWidth || !video.videoHeight) {
+        return {
+          x: rect.x + normalizedX * rect.w,
+          y: rect.y + normalizedY * rect.h
+        };
+      }
+
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const scale = Math.max(rect.w / vw, rect.h / vh);
+      const sw = rect.w / scale;
+      const sh = rect.h / scale;
+      const sx = (vw - sw) / 2;
+      const sy = (vh - sh) / 2;
+
+      return {
+        x: rect.x + ((normalizedX * vw - sx) / sw) * rect.w,
+        y: rect.y + ((normalizedY * vh - sy) / sh) * rect.h
+      };
+    }
+
+    function detectFacesForFeed(feed) {
+      if (!feed.video.videoWidth || !faceLandmarker) return null;
+
+      const currentTime = feed.video.currentTime;
+      if (feed.id === "A" && lastFaceVideoTimeA === currentTime) return faceResultsA;
+      if (feed.id === "B" && lastFaceVideoTimeB === currentTime) return faceResultsB;
+      if (frame % 3 !== 0) return feed.id === "A" ? faceResultsA : faceResultsB;
+
+      const result = faceLandmarker.detectForVideo(feed.video, performance.now());
+      if (feed.id === "A") {
+        faceResultsA = result;
+        lastFaceVideoTimeA = currentTime;
+      } else {
+        faceResultsB = result;
+        lastFaceVideoTimeB = currentTime;
+      }
+      return result;
+    }
+
+    function mapFaceDetectionToCanvas(face, feed) {
+      if (!face || !feed) return null;
+      if (!face[10] || !face[152] || !face[33] || !face[133] || !face[362] || !face[263]) return null;
+
+      const leftEye = averageLandmarks([face[33], face[133]]);
+      const rightEye = averageLandmarks([face[362], face[263]]);
+      const leftPoint = mapVideoPointToCanvas(leftEye.x, leftEye.y, feed.video, feed.rect);
+      const rightPoint = mapVideoPointToCanvas(rightEye.x, rightEye.y, feed.video, feed.rect);
+      const topPoint = mapVideoPointToCanvas(face[10].x, face[10].y, feed.video, feed.rect);
+      const chinPoint = mapVideoPointToCanvas(face[152].x, face[152].y, feed.video, feed.rect);
+      const sideA = face[234] ? mapVideoPointToCanvas(face[234].x, face[234].y, feed.video, feed.rect) : leftPoint;
+      const sideB = face[454] ? mapVideoPointToCanvas(face[454].x, face[454].y, feed.video, feed.rect) : rightPoint;
+      const eyeDist = Math.hypot(rightPoint.x - leftPoint.x, rightPoint.y - leftPoint.y);
+      const faceHeight = Math.max(eyeDist * 1.45, Math.hypot(chinPoint.x - topPoint.x, chinPoint.y - topPoint.y));
+      const faceWidth = Math.max(eyeDist * 2.25, Math.hypot(sideB.x - sideA.x, sideB.y - sideA.y));
+      if (!Number.isFinite(faceWidth) || !Number.isFinite(faceHeight) || faceWidth <= 0 || faceHeight <= 0) return null;
+
+      return {
+        cameraId: feed.id,
+        x: (sideA.x + sideB.x + topPoint.x + chinPoint.x) / 4,
+        y: (sideA.y + sideB.y + topPoint.y + chinPoint.y) / 4,
+        width: faceWidth,
+        height: faceHeight,
+        size: Math.max(faceWidth * 1.2, faceHeight * 0.82),
+        angle: Math.atan2(rightPoint.y - leftPoint.y, rightPoint.x - leftPoint.x)
+      };
+    }
+
+    function findNearestFaceTrack(detection, usedTrackIds) {
+      let best = null;
+      let bestDist = Infinity;
+      for (const track of faceTracks.values()) {
+        if (usedTrackIds.has(track.id) || track.cameraId !== detection.cameraId) continue;
+        const distToTrack = Math.hypot(track.x - detection.x, track.y - detection.y);
+        const maxDist = Math.max(80, Math.max(track.size, detection.size) * 0.75);
+        if (distToTrack < maxDist && distToTrack < bestDist) {
+          best = track;
+          bestDist = distToTrack;
+        }
+      }
+      return best;
+    }
+
+    function updateFaceTracks(detections, cameraId, now) {
+      const usedTrackIds = new Set();
+      detections.forEach(detection => {
+        detection.cameraId = detection.cameraId || cameraId;
+        let track = findNearestFaceTrack(detection, usedTrackIds);
+        if (!track) {
+          track = {
+            id: nextFaceTrackId++,
+            cameraId: detection.cameraId,
+            x: detection.x,
+            y: detection.y,
+            width: detection.width,
+            height: detection.height,
+            size: detection.size,
+            angle: detection.angle,
+            lastSeen: now
+          };
+          faceTracks.set(track.id, track);
+        } else {
+          track.x += (detection.x - track.x) * FACE_TRACK_POSITION_SMOOTHING;
+          track.y += (detection.y - track.y) * FACE_TRACK_POSITION_SMOOTHING;
+          track.width += (detection.width - track.width) * FACE_TRACK_SIZE_SMOOTHING;
+          track.height += (detection.height - track.height) * FACE_TRACK_SIZE_SMOOTHING;
+          track.size += (detection.size - track.size) * FACE_TRACK_SIZE_SMOOTHING;
+          track.angle = smoothAngle(track.angle, detection.angle, FACE_TRACK_ROTATION_SMOOTHING);
+          track.cameraId = detection.cameraId;
+          track.lastSeen = now;
+        }
+        usedTrackIds.add(track.id);
+      });
+
+      for (const [id, track] of faceTracks.entries()) {
+        const hasMask = activeFaceMasks.some(mask => mask.trackId === id);
+        if (!hasMask && now - track.lastSeen > FACE_LOST_GRACE_PERIOD * 3) faceTracks.delete(id);
+      }
+    }
+
+    function collectFaceDetections(w, h) {
+      const detections = [];
+      getVisibleFaceFeeds(w, h).forEach(feed => {
+        const result = detectFacesForFeed(feed);
+        const faces = result && result.faceLandmarks ? result.faceLandmarks : [];
+        faces.forEach(face => {
+          const detection = mapFaceDetectionToCanvas(face, feed);
+          if (detection) detections.push(detection);
+        });
+      });
+      return detections;
+    }
+
+    function trackHasActiveFaceMask(trackId, now = performance.now()) {
+      return activeFaceMasks.some(mask => mask.trackId === trackId && now < mask.endTime);
+    }
+
+    function assignQueuedMasksToFaces(now) {
+      if (!faceMaskEnabled || faceMaskQueue.length === 0 || faceTracks.size === 0) return;
+      const tracks = [...faceTracks.values()]
+        .filter(track => now - track.lastSeen <= FACE_LOST_GRACE_PERIOD && !trackHasActiveFaceMask(track.id, now))
+        .sort((a, b) => a.id - b.id);
+      if (!tracks.length) return;
+
+      let guard = tracks.length;
+      while (faceMaskQueue.length && guard > 0) {
+        const track = tracks[nextFaceMaskTrackIndex % tracks.length];
+        nextFaceMaskTrackIndex++;
+        guard--;
+        if (trackHasActiveFaceMask(track.id, now)) continue;
+        const item = faceMaskQueue.shift();
+        activeFaceMasks.push({
+          id: item.id,
+          emoji: item.emoji,
+          trackId: track.id,
+          startTime: now,
+          endTime: now + FACE_MASK_DURATION
+        });
+      }
+    }
+
+    function updateActiveFaceMasks(now) {
+      activeFaceMasks = activeFaceMasks.filter(mask => {
+        const track = faceTracks.get(mask.trackId);
+        if (!faceMaskEnabled || now >= mask.endTime) return false;
+        if (!track) return now < mask.startTime + FACE_LOST_GRACE_PERIOD;
+        return now - track.lastSeen <= FACE_LOST_GRACE_PERIOD || now < mask.endTime - FACE_MASK_FADE_MS;
+      });
+    }
+
+    function updateFaceMaskSystem(w, h, now) {
+      updateFaceTracks(collectFaceDetections(w, h), "", now);
+      updateActiveFaceMasks(now);
+      assignQueuedMasksToFaces(now);
+    }
+
+    function drawFaceMasks(targetCtx, now) {
+      if (!faceMaskEnabled) return;
+      targetCtx.save();
+      targetCtx.textAlign = "center";
+      targetCtx.textBaseline = "middle";
+      activeFaceMasks.forEach(mask => {
+        const track = faceTracks.get(mask.trackId);
+        if (!track) return;
+        const remaining = mask.endTime - now;
+        const lostMs = now - track.lastSeen;
+        let alpha = remaining > FACE_MASK_FADE_MS ? 1 : Math.max(0, remaining / FACE_MASK_FADE_MS);
+        if (lostMs > FACE_LOST_GRACE_PERIOD) {
+          alpha *= Math.max(0, 1 - (lostMs - FACE_LOST_GRACE_PERIOD) / FACE_MASK_FADE_MS);
+        }
+        if (alpha <= 0) return;
+
+        targetCtx.save();
+        targetCtx.globalAlpha = alpha;
+        targetCtx.translate(track.x, track.y);
+        targetCtx.rotate(track.angle);
+        targetCtx.font = `${Math.max(28, track.size)}px ${FACE_MASK_FONT}`;
+        targetCtx.fillText(mask.emoji, 0, 0);
+        targetCtx.restore();
+      });
+
+      if (DEBUG_FACE_MASK) {
+        targetCtx.font = "12px sans-serif";
+        targetCtx.textAlign = "left";
+        targetCtx.textBaseline = "top";
+        for (const track of faceTracks.values()) {
+          targetCtx.strokeStyle = "rgba(0,255,180,0.9)";
+          targetCtx.lineWidth = 2;
+          targetCtx.strokeRect(track.x - track.width / 2, track.y - track.height / 2, track.width, track.height);
+          targetCtx.fillStyle = "rgba(0,255,180,0.9)";
+          targetCtx.fillRect(track.x - 2, track.y - 2, 4, 4);
+          const mask = activeFaceMasks.find(item => item.trackId === track.id);
+          targetCtx.fillText(`#${track.id} ${mask ? mask.emoji : ""}`, track.x + 8, track.y + 8);
+        }
+        targetCtx.fillText(`queue:${faceMaskQueue.length}`, 12, 12);
+      }
+      targetCtx.restore();
+    }
+
+    function enqueueFaceMaskReaction(data, fallbackId = "") {
+      if (!faceMaskEnabled || !data) return;
+      const emoji = typeof data.value === "string" ? data.value : typeof data.emoji === "string" ? data.emoji : "";
+      if (!faceMaskEmojis.includes(emoji)) return;
+      const timestamp = typeof data.timestamp === "number" ? data.timestamp : Date.now();
+      if (timestamp < faceMaskBootTime - 5000) return;
+      const id = String(data.id || fallbackId || `${timestamp}:${emoji}`);
+      if (processedFaceMaskIds.has(id)) return;
+      processedFaceMaskIds.add(id);
+      if (processedFaceMaskIds.size > 300) {
+        const first = processedFaceMaskIds.values().next().value;
+        processedFaceMaskIds.delete(first);
+      }
+      faceMaskQueue.push({ id, emoji, timestamp });
+      while (faceMaskQueue.length > MAX_FACE_MASK_QUEUE) faceMaskQueue.shift();
     }
 
     // Avatar System ---------------------------------------------------------
@@ -989,6 +1339,8 @@
       drawBase(w, h);
       drawAvatar(w, h);
       applyFx(w, h);
+      updateFaceMaskSystem(w, h, performance.now());
+      drawFaceMasks(ctx, performance.now());
       handleHands();
 
       requestAnimationFrame(loop);
@@ -1011,23 +1363,60 @@
       }
     }
 
-    function normalizeEmojiPayload(data) {
+    function normalizeReactionPayload(data, snapshotKey = "") {
       if (!data) return [];
-      if (Array.isArray(data.emojis)) return data.emojis;
-      if (typeof data.emoji === "string") return [data.emoji];
-      if (typeof data === "string") return [data];
+      if (typeof data === "string") {
+        return [{ value: data, type: "reaction", id: snapshotKey }];
+      }
+      if (Array.isArray(data)) {
+        return data.map((item, index) => typeof item === "string"
+          ? { value: item, type: "reaction", id: `${snapshotKey}:${index}` }
+          : {
+              value: typeof item.value === "string" ? item.value : typeof item.emoji === "string" ? item.emoji : "",
+              type: item.type || "reaction",
+              id: item.id || `${snapshotKey}:${index}`,
+              timestamp: item.timestamp
+            });
+      }
+      if (Array.isArray(data.items)) return normalizeReactionPayload(data.items, snapshotKey);
+      if (Array.isArray(data.emojis)) {
+        return data.emojis.map((emoji, index) => typeof emoji === "string"
+          ? { value: emoji, type: "reaction", id: `${snapshotKey}:emoji:${index}` }
+          : {
+              value: typeof emoji.value === "string" ? emoji.value : typeof emoji.emoji === "string" ? emoji.emoji : "",
+              type: emoji.type || "reaction",
+              id: emoji.id || `${snapshotKey}:emoji:${index}`,
+              timestamp: emoji.timestamp
+            });
+      }
+      if (typeof data.value === "string" || typeof data.emoji === "string") {
+        return [{
+          value: typeof data.value === "string" ? data.value : data.emoji,
+          type: data.type || "reaction",
+          id: data.id || snapshotKey,
+          timestamp: data.timestamp
+        }];
+      }
       return [];
     }
 
     onChildAdded(ref(db, "reactions"), snapshot => {
-      const emojis = normalizeEmojiPayload(snapshot.val());
-      emojis.slice(0, 15).forEach((e, i) => {
-        setTimeout(() => spawnEmoji(e), i * 70);
+      const reactions = normalizeReactionPayload(snapshot.val(), snapshot.key);
+      reactions.slice(0, 15).forEach((item, i) => {
+        const type = item.type || "reaction";
+        if (type === "faceMask") {
+          enqueueFaceMaskReaction(item, `${snapshot.key}:${i}`);
+          return;
+        }
+        if (type === "reaction" && typeof item.value === "string" && item.value.length <= 16) {
+          setTimeout(() => spawnEmoji(item.value), i * 70);
+        }
       });
     });
 
     updateFxButtons();
     updateAvatarButtons();
+    setFaceMaskEnabled(faceMaskEnabled);
     loop();
   </script>
 </body>

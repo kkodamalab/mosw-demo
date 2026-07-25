@@ -29,11 +29,19 @@
       max-width: 640px;
     }
 
-    #emojiPalette {
+    .sectionLabel {
+      margin: 0 0 8px;
+      color: rgba(255,255,255,.72);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .12em;
+    }
+
+    .emojiPalette {
       display: grid;
       grid-template-columns: repeat(6, 1fr);
       gap: 10px;
-      margin-bottom: 22px;
+      margin-bottom: 18px;
     }
 
     .emojiBtn {
@@ -54,6 +62,11 @@
     .emojiBtn.selected {
       background: #555;
       border-color: #fff;
+    }
+
+    .faceMaskBtn {
+      background: #201d2a;
+      border-color: rgba(126,232,255,.38);
     }
 
     #positionArea {
@@ -78,6 +91,11 @@
       pointer-events: none;
       text-shadow: 0 0 12px rgba(255,255,255,.65);
       animation: pop .12s ease-out;
+    }
+
+    .placedEmoji.faceMaskPreview {
+      font-size: 34px;
+      text-shadow: 0 0 14px rgba(126,232,255,.82);
     }
 
     @keyframes pop {
@@ -137,14 +155,11 @@
 </head>
 <body>
   <div id="app">
-    <div id="emojiPalette">
-      <button class="emojiBtn selected" data-emoji="☺️">☺️</button>
-      <button class="emojiBtn" data-emoji="💗">💗</button>
-      <button class="emojiBtn" data-emoji="👍">👍</button>
-      <button class="emojiBtn" data-emoji="⭐">⭐</button>
-      <button class="emojiBtn" data-emoji="🙌">🙌</button>
-      <button class="emojiBtn" data-emoji="🍻">🍻</button>
-    </div>
+    <p class="sectionLabel">REACTION</p>
+    <div id="reactionPalette" class="emojiPalette"></div>
+
+    <p class="sectionLabel">FACE MASK</p>
+    <div id="faceMaskPalette" class="emojiPalette"></div>
 
     <div id="positionArea"></div>
 
@@ -172,30 +187,60 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    const emojiButtons = document.querySelectorAll(".emojiBtn");
+    const reactionPalette = document.getElementById("reactionPalette");
+    const faceMaskPalette = document.getElementById("faceMaskPalette");
     const positionArea = document.getElementById("positionArea");
     const sendBtn = document.getElementById("sendBtn");
     const clearBtn = document.getElementById("clearBtn");
     const counter = document.getElementById("counter");
     const status = document.getElementById("status");
 
+    const reactionEmojis = ["☺️", "💗", "👍", "⭐", "🙌", "🍻"];
+    const faceMaskEmojis = ["😎", "🥹", "🤪", "😍", "😭", "😡", "🤡", "👽", "🤖", "👻"];
     const MAX_REACTIONS = 15;
-    let selectedEmoji = "☺️";
+    const clientId = localStorage.getItem("moswClientId") || crypto.randomUUID();
+    localStorage.setItem("moswClientId", clientId);
+
+    let selectedReactionEmoji = reactionEmojis[0];
     let reactions = [];
 
-    emojiButtons.forEach(btn => {
-      btn.addEventListener("click", () => {
-        emojiButtons.forEach(b => b.classList.remove("selected"));
-        btn.classList.add("selected");
-        selectedEmoji = btn.dataset.emoji;
+    function createEmojiButton(emoji, type, selected = false) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = type === "faceMask" ? "emojiBtn faceMaskBtn" : "emojiBtn";
+      btn.dataset.emoji = emoji;
+      btn.dataset.type = type;
+      btn.textContent = emoji;
+      if (selected) btn.classList.add("selected");
+      return btn;
+    }
+
+    function renderPalettes() {
+      reactionEmojis.forEach((emoji, index) => {
+        const btn = createEmojiButton(emoji, "reaction", index === 0);
+        btn.addEventListener("click", () => {
+          reactionPalette.querySelectorAll(".emojiBtn").forEach(b => b.classList.remove("selected"));
+          btn.classList.add("selected");
+          selectedReactionEmoji = emoji;
+        });
+        reactionPalette.appendChild(btn);
       });
-    });
+
+      faceMaskEmojis.forEach(emoji => {
+        const btn = createEmojiButton(emoji, "faceMask");
+        btn.addEventListener("click", () => addFaceMaskReaction(emoji));
+        faceMaskPalette.appendChild(btn);
+      });
+    }
+
+    function canAddReaction() {
+      if (reactions.length < MAX_REACTIONS) return true;
+      status.textContent = "最大15個まで選択できます";
+      return false;
+    }
 
     positionArea.addEventListener("pointerdown", e => {
-      if (reactions.length >= MAX_REACTIONS) {
-        status.textContent = "最大15個まで選択できます";
-        return;
-      }
+      if (!canAddReaction()) return;
 
       const rect = positionArea.getBoundingClientRect();
       const rawX = (e.clientX - rect.left) / rect.width;
@@ -208,7 +253,9 @@
       const y = (row + 0.5) / 3;
 
       const reaction = {
-        emoji: selectedEmoji,
+        value: selectedReactionEmoji,
+        emoji: selectedReactionEmoji,
+        type: "reaction",
         x,
         y
       };
@@ -218,10 +265,26 @@
       updateUI();
     });
 
+    function addFaceMaskReaction(emoji) {
+      if (!canAddReaction()) return;
+      const reaction = {
+        value: emoji,
+        emoji,
+        type: "faceMask"
+      };
+      reactions.push(reaction);
+      drawPlacedEmoji({
+        ...reaction,
+        x: 0.5 + (Math.random() - 0.5) * 0.55,
+        y: 0.5 + (Math.random() - 0.5) * 0.45
+      });
+      updateUI();
+    }
+
     function drawPlacedEmoji(reaction) {
       const el = document.createElement("div");
-      el.className = "placedEmoji";
-      el.textContent = reaction.emoji;
+      el.className = reaction.type === "faceMask" ? "placedEmoji faceMaskPreview" : "placedEmoji";
+      el.textContent = reaction.emoji || reaction.value;
       el.style.left = `${reaction.x * 100}%`;
       el.style.top = `${reaction.y * 100}%`;
       positionArea.appendChild(el);
@@ -245,34 +308,35 @@
       if (reactions.length === 0) return;
 
       sendBtn.disabled = true;
-      status.textContent = "送信中...";
+      status.textContent = "";
 
       try {
         const reactionsRef = ref(db, "reactions");
+        const batchId = crypto.randomUUID();
 
         for (const reaction of reactions) {
+          const id = crypto.randomUUID();
           await push(reactionsRef, {
-            emoji: reaction.emoji,
-            x: reaction.x,
-            y: reaction.y,
+            id,
+            batchId,
+            clientId,
+            value: reaction.value,
+            emoji: reaction.value,
+            type: reaction.type || "reaction",
+            x: reaction.x ?? null,
+            y: reaction.y ?? null,
             timestamp: serverTimestamp()
           });
         }
 
-        const sentCount = reactions.length;
         clearReactions();
-        status.textContent = `${sentCount}個送信しました`;
-
-        setTimeout(() => {
-          status.textContent = "";
-        }, 1200);
-
       } catch (e) {
         status.textContent = "送信エラー: " + e.message;
         updateUI();
       }
     });
 
+    renderPalettes();
     updateUI();
   </script>
 </body>
