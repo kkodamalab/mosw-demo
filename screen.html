@@ -245,6 +245,10 @@
     let faceResultsB = null;
     let lastFaceVideoTimeA = -1;
     let lastFaceVideoTimeB = -1;
+    let handResultsA = null;
+    let handResultsB = null;
+    let lastHandVideoTimeA = -1;
+    let lastHandVideoTimeB = -1;
 
     // ========================================
     // FACE MASK REACTION SYSTEM
@@ -267,6 +271,28 @@
     let nextFaceMaskTrackIndex = 0;
     const faceMaskBootTime = Date.now();
     const processedFaceMaskIds = new Set();
+
+    // ========================================
+    // HAND GESTURE EMOJI ORIGIN SYSTEM
+    // ========================================
+    const GESTURE_EMOJI_MAP = {
+      OK: "👌",
+      PEACE: "✌️",
+      HEART: "💗",
+      GOOD: "👍"
+    };
+    const GESTURE_EMOJI_DURATION = 1400;
+    const GESTURE_EMOJI_COOLDOWN = 900;
+    const GESTURE_EMOJI_RISE_DISTANCE = 160;
+    const REQUIRED_STABLE_GESTURE_FRAMES = 4;
+    const HAND_LOST_GRACE_PERIOD = 400;
+    const MAX_GESTURE_EMOJIS = 50;
+    const DEBUG_GESTURE_EMOJI = false;
+    const HAND_TRACK_POSITION_SMOOTHING = 0.35;
+    const GESTURE_EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+    let handTracks = new Map();
+    let nextHandTrackId = 1;
+    let gestureReactionEmojis = [];
 
     const fxBuffer = document.createElement("canvas");
     const fxCtx = fxBuffer.getContext("2d");
@@ -467,6 +493,7 @@
       gestureBtn.textContent = gestureEnabled ? "GESTURE ON" : "GESTURE OFF";
       gestureBtn.classList.toggle("active", gestureEnabled);
       gestureStatus.textContent = gestureEnabled ? "Hand: ON" : "Hand: OFF";
+      if (!gestureEnabled) clearGestureHandStates();
     };
 
     faceMaskBtn.onclick = () => {
@@ -849,6 +876,330 @@
       }
       faceMaskQueue.push({ id, emoji, timestamp });
       while (faceMaskQueue.length > MAX_FACE_MASK_QUEUE) faceMaskQueue.shift();
+    }
+
+    // ========================================
+    // HAND GESTURE EMOJI ORIGIN SYSTEM
+    // ========================================
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function randomRange(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    function getVisibleHandFeeds(w, h) {
+      return getVisibleFaceFeeds(w, h);
+    }
+
+    function detectHandsForFeed(feed) {
+      if (!feed.video.videoWidth || !handLandmarker) return null;
+      const currentTime = feed.video.currentTime;
+      if (feed.id === "A" && lastHandVideoTimeA === currentTime) return handResultsA;
+      if (feed.id === "B" && lastHandVideoTimeB === currentTime) return handResultsB;
+      if (frame % 5 !== 0) return feed.id === "A" ? handResultsA : handResultsB;
+
+      const result = handLandmarker.detectForVideo(feed.video, performance.now());
+      if (feed.id === "A") {
+        handResultsA = result;
+        lastHandVideoTimeA = currentTime;
+      } else {
+        handResultsB = result;
+        lastHandVideoTimeB = currentTime;
+      }
+      return result;
+    }
+
+    function mapHandPointToCanvas(landmark, feed) {
+      const mirrorOn = activeFx.has("mirror");
+      const x = mirrorOn ? 1 - landmark.x : landmark.x;
+      return mapVideoPointToCanvas(x, landmark.y, feed.video, feed.rect);
+    }
+
+    function getHandCenter(landmarks, feed) {
+      const points = [0, 5, 9, 17].map(index => mapHandPointToCanvas(landmarks[index], feed));
+      return {
+        x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+        y: points.reduce((sum, point) => sum + point.y, 0) / points.length
+      };
+    }
+
+    function getHandScale(landmarks, feed) {
+      const wrist = mapHandPointToCanvas(landmarks[0], feed);
+      const middleBase = mapHandPointToCanvas(landmarks[9], feed);
+      const middleTip = mapHandPointToCanvas(landmarks[12], feed);
+      return Math.max(
+        Math.hypot(wrist.x - middleBase.x, wrist.y - middleBase.y),
+        Math.hypot(wrist.x - middleTip.x, wrist.y - middleTip.y) * 0.55
+      );
+    }
+
+    function getHandednessLabel(result, index) {
+      const category = result
+        && result.handedness
+        && result.handedness[index]
+        && result.handedness[index][0];
+      return category && category.categoryName ? category.categoryName : `hand${index}`;
+    }
+
+    function findNearestHandTrack(detection, usedTrackIds) {
+      let best = null;
+      let bestDist = Infinity;
+      for (const track of handTracks.values()) {
+        if (usedTrackIds.has(track.id) || track.cameraId !== detection.cameraId) continue;
+        const distToTrack = Math.hypot(track.x - detection.center.x, track.y - detection.center.y);
+        const maxDist = Math.max(80, detection.scale * 1.35, track.scale * 1.35);
+        if (distToTrack < maxDist && distToTrack < bestDist) {
+          best = track;
+          bestDist = distToTrack;
+        }
+      }
+      return best;
+    }
+
+    function updateHandTracks(handResults, cameraId, now) {
+      const usedTrackIds = new Set();
+      handResults.forEach(detection => {
+        const track = findNearestHandTrack(detection, usedTrackIds) || {
+          id: nextHandTrackId++,
+          currentGesture: "",
+          stableFrames: 0,
+          lastTriggeredAt: 0
+        };
+
+        if (!handTracks.has(track.id)) {
+          track.x = detection.center.x;
+          track.y = detection.center.y;
+          track.scale = detection.scale;
+          track.originX = detection.center.x;
+          track.originY = detection.center.y;
+          handTracks.set(track.id, track);
+        } else {
+          track.x += (detection.center.x - track.x) * HAND_TRACK_POSITION_SMOOTHING;
+          track.y += (detection.center.y - track.y) * HAND_TRACK_POSITION_SMOOTHING;
+          track.scale += (detection.scale - track.scale) * 0.25;
+        }
+
+        track.cameraId = cameraId || detection.cameraId;
+        track.handedness = detection.handedness;
+        track.landmarks = detection.landmarks;
+        track.feed = detection.feed;
+        track.lastSeenAt = now;
+        usedTrackIds.add(track.id);
+      });
+
+      for (const [id, track] of handTracks.entries()) {
+        if (now - track.lastSeenAt > HAND_LOST_GRACE_PERIOD) handTracks.delete(id);
+      }
+    }
+
+    function recognizeGestureForHand(handTrack) {
+      return handTrack && handTrack.landmarks ? detectGesture(handTrack.landmarks) : "";
+    }
+
+    function getGestureOrigin(gestureName, landmarks, feed, pairedHand = null) {
+      if (gestureName === "HEART" && pairedHand) {
+        const a = getHandCenter(landmarks, feed);
+        const b = getHandCenter(pairedHand.landmarks, pairedHand.feed);
+        return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      }
+
+      if (gestureName === "GOOD") {
+        return mapHandPointToCanvas(landmarks[4], feed);
+      }
+
+      if (gestureName === "PEACE") {
+        const indexTip = mapHandPointToCanvas(landmarks[8], feed);
+        const middleTip = mapHandPointToCanvas(landmarks[12], feed);
+        return { x: (indexTip.x + middleTip.x) / 2, y: (indexTip.y + middleTip.y) / 2 };
+      }
+
+      if (gestureName === "OK") {
+        const thumbTip = mapHandPointToCanvas(landmarks[4], feed);
+        const indexTip = mapHandPointToCanvas(landmarks[8], feed);
+        return { x: (thumbTip.x + indexTip.x) / 2, y: (thumbTip.y + indexTip.y) / 2 };
+      }
+
+      return getHandCenter(landmarks, feed);
+    }
+
+    function canTriggerGestureEmoji(handTrack, gestureName, now) {
+      if (!gestureName) {
+        handTrack.currentGesture = "";
+        handTrack.stableFrames = 0;
+        return false;
+      }
+      if (handTrack.currentGesture !== gestureName) {
+        handTrack.currentGesture = gestureName;
+        handTrack.stableFrames = 1;
+        return false;
+      }
+      handTrack.stableFrames++;
+      return handTrack.stableFrames >= REQUIRED_STABLE_GESTURE_FRAMES
+        && now - handTrack.lastTriggeredAt >= GESTURE_EMOJI_COOLDOWN;
+    }
+
+    function spawnGestureEmoji(emoji, x, y, handScale, now) {
+      const startSize = clamp(handScale * 0.9, 32, 72);
+      gestureReactionEmojis.push({
+        emoji,
+        startX: x,
+        startY: y,
+        startTime: now,
+        duration: GESTURE_EMOJI_DURATION,
+        velocityX: randomRange(-30, 30),
+        riseDistance: randomRange(120, GESTURE_EMOJI_RISE_DISTANCE + 20),
+        rotation: randomRange(-0.25, 0.25),
+        rotationSpeed: randomRange(-0.8, 0.8),
+        startSize,
+        endSize: clamp(startSize * randomRange(1.65, 2.05), 78, 112)
+      });
+      while (gestureReactionEmojis.length > MAX_GESTURE_EMOJIS) gestureReactionEmojis.shift();
+    }
+
+    function updateGestureEmojis(now) {
+      gestureReactionEmojis = gestureReactionEmojis.filter(item => now - item.startTime < item.duration);
+    }
+
+    function drawGestureEmojis(targetCtx, now) {
+      updateGestureEmojis(now);
+      targetCtx.save();
+      targetCtx.textAlign = "center";
+      targetCtx.textBaseline = "middle";
+      gestureReactionEmojis.forEach(item => {
+        const progress = clamp((now - item.startTime) / item.duration, 0, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const x = item.startX + item.velocityX * progress;
+        const y = item.startY - item.riseDistance * eased;
+        const size = item.startSize + (item.endSize - item.startSize) * eased;
+        const alpha = 1 - Math.pow(progress, 2);
+        targetCtx.save();
+        targetCtx.globalAlpha = alpha;
+        targetCtx.translate(x, y);
+        targetCtx.rotate(item.rotation + item.rotationSpeed * progress);
+        targetCtx.font = `${size}px ${GESTURE_EMOJI_FONT}`;
+        targetCtx.fillText(item.emoji, 0, 0);
+        targetCtx.restore();
+      });
+      targetCtx.restore();
+    }
+
+    function clearGestureHandStates() {
+      handTracks.clear();
+      handResultsA = null;
+      handResultsB = null;
+      lastHandVideoTimeA = -1;
+      lastHandVideoTimeB = -1;
+    }
+
+    function isTwoHandHeart(leftTrack, rightTrack) {
+      if (!leftTrack || !rightTrack || !leftTrack.landmarks || !rightTrack.landmarks) return false;
+      const a = leftTrack.landmarks;
+      const b = rightTrack.landmarks;
+      const aPalm = dist(a[0], a[9]);
+      const bPalm = dist(b[0], b[9]);
+      const scale = (aPalm + bPalm) / 2;
+      if (!scale) return false;
+      const indexClose = dist(a[8], b[8]) < scale * 0.5;
+      const thumbClose = dist(a[4], b[4]) < scale * 0.58;
+      const wristsApart = dist(a[0], b[0]) > scale * 0.85;
+      const handsLevel = Math.abs(a[8].y - b[8].y) < scale * 0.42;
+      return indexClose && thumbClose && wristsApart && handsLevel;
+    }
+
+    function triggerTwoHandHeartIfReady(now) {
+      const tracks = [...handTracks.values()].filter(track => now - track.lastSeenAt <= HAND_LOST_GRACE_PERIOD);
+      if (tracks.length < 2) return false;
+      for (let i = 0; i < tracks.length - 1; i++) {
+        for (let j = i + 1; j < tracks.length; j++) {
+          const a = tracks[i];
+          const b = tracks[j];
+          if (a.cameraId !== b.cameraId) continue;
+          if (!isTwoHandHeart(a, b)) continue;
+          const heartId = `heart:${Math.min(a.id, b.id)}:${Math.max(a.id, b.id)}`;
+          const heartState = handTracks.get(heartId) || {
+            id: heartId,
+            currentGesture: "",
+            stableFrames: 0,
+            lastTriggeredAt: 0,
+            lastSeenAt: now
+          };
+          heartState.lastSeenAt = now;
+          handTracks.set(heartId, heartState);
+          if (canTriggerGestureEmoji(heartState, "HEART", now)) {
+            const origin = getGestureOrigin("HEART", a.landmarks, a.feed, b);
+            const scale = Math.max(a.scale, b.scale);
+            spawnGestureEmoji(GESTURE_EMOJI_MAP.HEART, origin.x, origin.y, scale, now);
+            heartState.lastTriggeredAt = now;
+          }
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function processGestureTracks(now) {
+      const heartTriggered = triggerTwoHandHeartIfReady(now);
+      for (const track of handTracks.values()) {
+        if (typeof track.id === "string" || now - track.lastSeenAt > HAND_LOST_GRACE_PERIOD) continue;
+        const gesture = recognizeGestureForHand(track);
+        if (!gesture || (heartTriggered && gesture === "HEART")) {
+          canTriggerGestureEmoji(track, "", now);
+          continue;
+        }
+        if (!GESTURE_EMOJI_MAP[gesture]) continue;
+        if (!canTriggerGestureEmoji(track, gesture, now)) continue;
+        const origin = getGestureOrigin(gesture, track.landmarks, track.feed);
+        spawnGestureEmoji(GESTURE_EMOJI_MAP[gesture], origin.x, origin.y, track.scale, now);
+        track.lastTriggeredAt = now;
+        gestureStatus.textContent = "Gesture: " + gesture;
+      }
+    }
+
+    function updateGestureHandSystem(w, h, now) {
+      if (!gestureEnabled) {
+        gestureStatus.textContent = "Hand: OFF";
+        return;
+      }
+
+      if (!handLandmarker) return;
+      const detections = [];
+      getVisibleHandFeeds(w, h).forEach(feed => {
+        const result = detectHandsForFeed(feed);
+        const hands = result && result.landmarks ? result.landmarks : [];
+        hands.forEach((landmarks, index) => {
+          const center = getHandCenter(landmarks, feed);
+          detections.push({
+            cameraId: feed.id,
+            handedness: getHandednessLabel(result, index),
+            landmarks,
+            feed,
+            center,
+            scale: getHandScale(landmarks, feed)
+          });
+        });
+      });
+
+      if (!detections.length) {
+        gestureStatus.textContent = "Hand: ON";
+      }
+      updateHandTracks(detections, "", now);
+      processGestureTracks(now);
+
+      if (DEBUG_GESTURE_EMOJI) {
+        ctx.save();
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        for (const track of handTracks.values()) {
+          if (typeof track.id === "string") continue;
+          ctx.fillStyle = "rgba(255,240,80,0.9)";
+          ctx.fillRect(track.x - 3, track.y - 3, 6, 6);
+          ctx.fillText(`#${track.id} ${track.currentGesture || ""} ${track.stableFrames || 0}`, track.x + 8, track.y + 8);
+        }
+        ctx.restore();
+      }
     }
 
     // Avatar System ---------------------------------------------------------
@@ -1341,7 +1692,8 @@
       applyFx(w, h);
       updateFaceMaskSystem(w, h, performance.now());
       drawFaceMasks(ctx, performance.now());
-      handleHands();
+      updateGestureHandSystem(w, h, performance.now());
+      drawGestureEmojis(ctx, performance.now());
 
       requestAnimationFrame(loop);
     }
