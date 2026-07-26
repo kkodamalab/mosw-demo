@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
@@ -201,7 +201,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, onChildAdded, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getDatabase, ref, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
     import {
       HandLandmarker,
       PoseLandmarker,
@@ -1971,6 +1971,9 @@
               timestamp: item.timestamp
             });
       }
+      if (data.type === "textOverlay" && data.layers) {
+        return [{ type: "textOverlay", layers: data.layers, id: data.id || snapshotKey, timestamp: data.timestamp }];
+      }
       if (Array.isArray(data.items)) return normalizeReactionPayload(data.items, snapshotKey);
       if (Array.isArray(data.emojis)) {
         return data.emojis.map((emoji, index) => typeof emoji === "string"
@@ -1993,18 +1996,18 @@
       return [];
     }
 
-    onValue(ref(db, "textOverlay/layers"), snapshot => {
-      const data = snapshot.val() || {};
-      TEXT_LAYER_IDS.forEach((id, index) => {
-        textOverlayLayers[id] = sanitizeTextLayer(data[id], index + 1);
-      });
-      lastTextOverlayTime = performance.now();
-    });
 
     onChildAdded(ref(db, "reactions"), snapshot => {
       const reactions = normalizeReactionPayload(snapshot.val(), snapshot.key);
       reactions.slice(0, 15).forEach((item, i) => {
         const type = item.type || "reaction";
+        if (type === "textOverlay" && item.layers) {
+          TEXT_LAYER_IDS.forEach((id, index) => {
+            textOverlayLayers[id] = sanitizeTextLayer(item.layers[id], index + 1);
+          });
+          lastTextOverlayTime = performance.now();
+          return;
+        }
         if (type === "faceMask") {
           enqueueFaceMaskReaction(item, `${snapshot.key}:${i}`);
           return;
