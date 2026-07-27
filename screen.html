@@ -305,9 +305,8 @@
       GOOD: "👍"
     };
     const GESTURE_EMOJI_DURATION = 1400;
-    const GESTURE_EMOJI_COOLDOWN = 900;
+    const GESTURE_EMOJI_HOLD_DURATION_MS = 2000;
     const GESTURE_EMOJI_RISE_DISTANCE = 160;
-    const REQUIRED_STABLE_GESTURE_FRAMES = 4;
     const HAND_LOST_GRACE_PERIOD = 400;
     const MAX_GESTURE_EMOJIS = 50;
     const DEBUG_GESTURE_EMOJI = false;
@@ -1069,17 +1068,27 @@
     function canTriggerGestureEmoji(handTrack, gestureName, now) {
       if (!gestureName) {
         handTrack.currentGesture = "";
-        handTrack.stableFrames = 0;
+        handTrack.candidateGesture = "";
+        handTrack.gestureStartTime = 0;
+        handTrack.gestureSent = false;
         return false;
       }
-      if (handTrack.currentGesture !== gestureName) {
+
+      if (handTrack.candidateGesture !== gestureName) {
         handTrack.currentGesture = gestureName;
-        handTrack.stableFrames = 1;
+        handTrack.candidateGesture = gestureName;
+        handTrack.gestureStartTime = now;
+        handTrack.gestureSent = false;
         return false;
       }
-      handTrack.stableFrames++;
-      return handTrack.stableFrames >= REQUIRED_STABLE_GESTURE_FRAMES
-        && now - handTrack.lastTriggeredAt >= GESTURE_EMOJI_COOLDOWN;
+
+      handTrack.currentGesture = gestureName;
+      if (!handTrack.gestureStartTime) handTrack.gestureStartTime = now;
+      if (handTrack.gestureSent) return false;
+      if (now - handTrack.gestureStartTime < GESTURE_EMOJI_HOLD_DURATION_MS) return false;
+
+      handTrack.gestureSent = true;
+      return true;
     }
 
     function spawnGestureEmoji(emoji, x, y, handScale, now) {
