@@ -144,6 +144,8 @@
     }
 
     .time-warp-panel.active { display: flex; }
+    .eight-bit-panel { display: none; max-width: 980px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.18); }
+    .eight-bit-panel.active { display: flex; }
 
     .mini-label {
       opacity: 0.9;
@@ -227,6 +229,7 @@
         <button class="fxBtn" data-fx="strobe">8 Strobe</button>
         <button class="fxBtn" data-fx="zoom">9 Zoom</button>
         <button class="fxBtn" data-fx="timewarp">T TIME WARP</button>
+        <button class="fxBtn" data-fx="eightbit">B 8-BIT</button>
         <span class="mini-label">Power</span><input id="powerSlider" type="range" min="0" max="100" value="55">
       </div>
 
@@ -250,6 +253,28 @@
         <button id="timeWarpStartBtn">START SCAN</button><button id="timeWarpFreezeBtn">FREEZE</button><button id="timeWarpResetBtn">RESET WARP</button>
       </div>
 
+      <div id="eightBitPanel" class="control-row eight-bit-panel">
+        <span class="mini-label">8-BIT</span>
+        <button id="eightBitPersonOnlyBtn" class="active">PERSON ON</button>
+        <span class="mini-label">Pixel Size</span><input id="eightBitPixelSize" type="range" min="2" max="32" step="2" value="8">
+        <span class="mini-label">Sprite</span><select id="eightBitSpriteResolution"><option value="auto">AUTO</option><option value="16">16 px</option><option value="24">24 px</option><option value="32" selected>32 px</option><option value="48">48 px</option><option value="64">64 px</option><option value="96">96 px</option></select>
+        <span class="mini-label">Colors</span><select id="eightBitColors"><option value="2">2</option><option value="4">4</option><option value="8">8</option><option value="16" selected>16</option><option value="32">32</option><option value="original">Original</option></select>
+        <span class="mini-label">Style</span><select id="eightBitColorStyle"><option value="original">Original</option><option value="famicom" selected>Famicom</option><option value="gameboy">Game Boy</option><option value="mono">Monochrome</option><option value="neon">Neon</option><option value="custom">Custom</option></select>
+        <button id="eightBitOutlineBtn" class="active">OUTLINE ON</button>
+        <span class="mini-label">Outline</span><select id="eightBitOutlineColor"><option value="black" selected>Black</option><option value="white">White</option><option value="custom">Custom</option></select><input id="eightBitOutlineCustom" type="color" value="#000000">
+        <span class="mini-label">Width</span><input id="eightBitOutlineWidth" type="range" min="1" max="3" step="1" value="1">
+        <span class="mini-label">Background</span><select id="eightBitBackground"><option value="live" selected>LIVE</option><option value="black">BLACK</option><option value="white">WHITE</option><option value="transparent">TRANSPARENT</option><option value="pixel">PIXEL</option><option value="solid">SOLID COLOR</option></select><input id="eightBitBackgroundColor" type="color" value="#000000">
+        <span class="mini-label">Opacity</span><input id="eightBitOpacity" type="range" min="0" max="100" value="100">
+        <span class="mini-label">Sprite FPS</span><select id="eightBitFps"><option value="live">LIVE</option><option value="30">30</option><option value="15">15</option><option value="12" selected>12</option><option value="8">8</option><option value="6">6</option><option value="4">4</option></select>
+        <button id="eightBitGridBtn">GRID OFF</button>
+        <button id="eightBitGhostBtn">GHOST OFF</button>
+        <span class="mini-label">Ghosts</span><input id="eightBitGhostCount" type="range" min="1" max="5" value="3">
+        <span class="mini-label">Delay</span><input id="eightBitGhostDelay" type="range" min="50" max="1000" step="50" value="150">
+        <span class="mini-label">Ghost Opacity</span><input id="eightBitGhostOpacity" type="range" min="0" max="100" value="40">
+        <span class="mini-label">Person</span><select id="eightBitPersonMode"><option value="all" selected>ALL</option><option value="largest">LARGEST</option></select>
+        <span class="mini-label">Custom</span><input id="eightBitColor1" type="color" value="#0f0f0f"><input id="eightBitColor2" type="color" value="#f8f8f8"><input id="eightBitColor3" type="color" value="#e43b44"><input id="eightBitColor4" type="color" value="#f77622"><input id="eightBitColor5" type="color" value="#feae34"><input id="eightBitColor6" type="color" value="#63c74d"><input id="eightBitColor7" type="color" value="#0099db"><input id="eightBitColor8" type="color" value="#5b6ee1">
+        <button id="eightBitFreezeBtn">FREEZE SPRITE</button><button id="eightBitReleaseBtn">RELEASE</button><button id="eightBitResetBtn">RESET</button>
+      </div>
       <div class="control-row">
         <button class="avatarBtn active" data-avatar="off">Avatar OFF</button>
         <button class="avatarBtn" data-avatar="mesh">Mesh</button>
@@ -327,6 +352,30 @@
     const timeWarpStartBtn = document.getElementById("timeWarpStartBtn");
     const timeWarpFreezeBtn = document.getElementById("timeWarpFreezeBtn");
     const timeWarpResetBtn = document.getElementById("timeWarpResetBtn");
+    const eightBitPanel = document.getElementById("eightBitPanel");
+    const eightBitPersonOnlyBtn = document.getElementById("eightBitPersonOnlyBtn");
+    const eightBitPixelSizeInput = document.getElementById("eightBitPixelSize");
+    const eightBitSpriteResolutionInput = document.getElementById("eightBitSpriteResolution");
+    const eightBitColorsInput = document.getElementById("eightBitColors");
+    const eightBitColorStyleInput = document.getElementById("eightBitColorStyle");
+    const eightBitOutlineBtn = document.getElementById("eightBitOutlineBtn");
+    const eightBitOutlineColorInput = document.getElementById("eightBitOutlineColor");
+    const eightBitOutlineCustomInput = document.getElementById("eightBitOutlineCustom");
+    const eightBitOutlineWidthInput = document.getElementById("eightBitOutlineWidth");
+    const eightBitBackgroundInput = document.getElementById("eightBitBackground");
+    const eightBitBackgroundColorInput = document.getElementById("eightBitBackgroundColor");
+    const eightBitOpacityInput = document.getElementById("eightBitOpacity");
+    const eightBitFpsInput = document.getElementById("eightBitFps");
+    const eightBitGridBtn = document.getElementById("eightBitGridBtn");
+    const eightBitGhostBtn = document.getElementById("eightBitGhostBtn");
+    const eightBitGhostCountInput = document.getElementById("eightBitGhostCount");
+    const eightBitGhostDelayInput = document.getElementById("eightBitGhostDelay");
+    const eightBitGhostOpacityInput = document.getElementById("eightBitGhostOpacity");
+    const eightBitPersonModeInput = document.getElementById("eightBitPersonMode");
+    const eightBitCustomColorInputs = Array.from({ length: 8 }, (_, i) => document.getElementById(`eightBitColor${i + 1}`));
+    const eightBitFreezeBtn = document.getElementById("eightBitFreezeBtn");
+    const eightBitReleaseBtn = document.getElementById("eightBitReleaseBtn");
+    const eightBitResetBtn = document.getElementById("eightBitResetBtn");
 
     let streamA = null;
     let streamB = null;
@@ -435,6 +484,51 @@
     let timeWarpLastProgress = timeWarpStartProgress();
     let timeWarpGhostBuffers = [];
 
+    // ========================================
+    // 8-BIT PERSON SPRITE EFFECT SYSTEM
+    // ========================================
+    const eightBitSourceCanvas = document.createElement("canvas");
+    const eightBitSourceCtx = eightBitSourceCanvas.getContext("2d");
+    const eightBitMaskCanvas = document.createElement("canvas");
+    const eightBitMaskCtx = eightBitMaskCanvas.getContext("2d");
+    const eightBitMaskSmallCanvas = document.createElement("canvas");
+    const eightBitMaskSmallCtx = eightBitMaskSmallCanvas.getContext("2d");
+    const eightBitMaskedCanvas = document.createElement("canvas");
+    const eightBitMaskedCtx = eightBitMaskedCanvas.getContext("2d");
+    const eightBitSmallCanvas = document.createElement("canvas");
+    const eightBitSmallCtx = eightBitSmallCanvas.getContext("2d", { willReadFrequently: true });
+    const eightBitSpriteCanvas = document.createElement("canvas");
+    const eightBitSpriteCtx = eightBitSpriteCanvas.getContext("2d");
+    const eightBitOutlineCanvas = document.createElement("canvas");
+    const eightBitOutlineCtx = eightBitOutlineCanvas.getContext("2d");
+    const eightBitPixelBgCanvas = document.createElement("canvas");
+    const eightBitPixelBgCtx = eightBitPixelBgCanvas.getContext("2d");
+    const eightBitFrozenCanvas = document.createElement("canvas");
+    const eightBitFrozenCtx = eightBitFrozenCanvas.getContext("2d");
+    let eightBitPersonOnly = true;
+    let eightBitPixelSize = 8;
+    let eightBitSpriteResolution = "32";
+    let eightBitColors = "16";
+    let eightBitColorStyle = "famicom";
+    let eightBitOutline = true;
+    let eightBitOutlineColorMode = "black";
+    let eightBitOutlineCustomColor = "#000000";
+    let eightBitOutlineWidth = 1;
+    let eightBitBackground = "live";
+    let eightBitBackgroundColor = "#000000";
+    let eightBitOpacity = 1;
+    let eightBitFps = "12";
+    let eightBitPixelGrid = false;
+    let eightBitGhost = false;
+    let eightBitGhostCount = 3;
+    let eightBitGhostDelay = 150;
+    let eightBitGhostOpacity = 0.4;
+    let eightBitPersonMode = "all";
+    let eightBitFrozen = false;
+    let eightBitLastSpriteAt = 0;
+    let eightBitLastSegTime = { A: -1, B: -1 };
+    let eightBitLastSegmentation = { A: null, B: null };
+    let eightBitGhostFrames = [];
     // ========================================
     // TEXT OVERLAY SYSTEM
     // ========================================
@@ -629,6 +723,7 @@
       });
       clearFxBtn.classList.toggle("active", activeFx.size === 0);
       timeWarpPanel.classList.toggle("active", activeFx.has("timewarp"));
+      eightBitPanel.classList.toggle("active", activeFx.has("eightbit"));
     }
 
     function toggleFx(nextFx) {
@@ -638,12 +733,14 @@
         if (willEnable) timeWarpStartScan();
         else timeWarpReset(false);
       }
+      if (nextFx === "eightbit" && !willEnable) resetEightBitEffect();
       updateFxButtons();
     }
 
     function clearFx() {
       activeFx.clear();
       timeWarpReset(false);
+      resetEightBitEffect();
       updateFxButtons();
     }
 
@@ -723,6 +820,37 @@
     timeWarpStartBtn.onclick = () => timeWarpStartScan();
     timeWarpFreezeBtn.onclick = () => { timeWarpFrozen = !timeWarpFrozen; timeWarpFreezeBtn.textContent = timeWarpFrozen ? "RELEASE" : "FREEZE"; timeWarpFreezeBtn.classList.toggle("active", timeWarpFrozen); };
     timeWarpResetBtn.onclick = () => timeWarpReset(true);
+
+    function updateEightBitControls() {
+      eightBitPixelSize = Number(eightBitPixelSizeInput.value) || 8;
+      eightBitSpriteResolution = eightBitSpriteResolutionInput.value || "32";
+      eightBitColors = eightBitColorsInput.value || "16";
+      eightBitColorStyle = eightBitColorStyleInput.value || "famicom";
+      eightBitOutlineColorMode = eightBitOutlineColorInput.value || "black";
+      eightBitOutlineCustomColor = eightBitOutlineCustomInput.value || "#000000";
+      eightBitOutlineWidth = Number(eightBitOutlineWidthInput.value) || 1;
+      eightBitBackground = eightBitBackgroundInput.value || "live";
+      eightBitBackgroundColor = eightBitBackgroundColorInput.value || "#000000";
+      eightBitOpacity = (Number(eightBitOpacityInput.value) || 0) / 100;
+      eightBitFps = eightBitFpsInput.value || "12";
+      eightBitGhostCount = Number(eightBitGhostCountInput.value) || 3;
+      eightBitGhostDelay = Number(eightBitGhostDelayInput.value) || 150;
+      eightBitGhostOpacity = (Number(eightBitGhostOpacityInput.value) || 0) / 100;
+      eightBitPersonMode = eightBitPersonModeInput.value || "all";
+    }
+
+    [eightBitPixelSizeInput, eightBitSpriteResolutionInput, eightBitColorsInput, eightBitColorStyleInput, eightBitOutlineColorInput, eightBitOutlineCustomInput, eightBitOutlineWidthInput, eightBitBackgroundInput, eightBitBackgroundColorInput, eightBitOpacityInput, eightBitFpsInput, eightBitGhostCountInput, eightBitGhostDelayInput, eightBitGhostOpacityInput, eightBitPersonModeInput, ...eightBitCustomColorInputs].forEach(el => {
+      el.oninput = updateEightBitControls;
+      el.onchange = updateEightBitControls;
+    });
+    eightBitPersonOnlyBtn.onclick = () => { eightBitPersonOnly = !eightBitPersonOnly; eightBitPersonOnlyBtn.textContent = eightBitPersonOnly ? "PERSON ON" : "PERSON OFF"; eightBitPersonOnlyBtn.classList.toggle("active", eightBitPersonOnly); eightBitGhostFrames = []; };
+    eightBitOutlineBtn.onclick = () => { eightBitOutline = !eightBitOutline; eightBitOutlineBtn.textContent = eightBitOutline ? "OUTLINE ON" : "OUTLINE OFF"; eightBitOutlineBtn.classList.toggle("active", eightBitOutline); };
+    eightBitGridBtn.onclick = () => { eightBitPixelGrid = !eightBitPixelGrid; eightBitGridBtn.textContent = eightBitPixelGrid ? "GRID ON" : "GRID OFF"; eightBitGridBtn.classList.toggle("active", eightBitPixelGrid); };
+    eightBitGhostBtn.onclick = () => { eightBitGhost = !eightBitGhost; eightBitGhostBtn.textContent = eightBitGhost ? "GHOST ON" : "GHOST OFF"; eightBitGhostBtn.classList.toggle("active", eightBitGhost); if (!eightBitGhost) eightBitGhostFrames = []; };
+    eightBitFreezeBtn.onclick = () => { eightBitFrozen = true; eightBitFrozenCanvas.width = eightBitSpriteCanvas.width; eightBitFrozenCanvas.height = eightBitSpriteCanvas.height; eightBitFrozenCtx.clearRect(0, 0, eightBitFrozenCanvas.width, eightBitFrozenCanvas.height); eightBitFrozenCtx.drawImage(eightBitSpriteCanvas, 0, 0); eightBitFreezeBtn.classList.add("active"); };
+    eightBitReleaseBtn.onclick = () => { eightBitFrozen = false; eightBitFreezeBtn.classList.remove("active"); };
+    eightBitResetBtn.onclick = () => resetEightBitEffect();
+    updateEightBitControls();
     updateTimeWarpControls();
 
     window.addEventListener("keydown", e => {
@@ -737,6 +865,7 @@
       if (e.key === "8") toggleFx("strobe");
       if (e.key === "9") toggleFx("zoom");
       if (e.key.toLowerCase() === "t") toggleFx("timewarp");
+      if (e.key.toLowerCase() === "b") toggleFx("eightbit");
       if (e.key.toLowerCase() === "s") syncBtn.click();
       if (e.key.toLowerCase() === "g") gestureBtn.click();
       // F is already used for fullscreen, so M toggles participant face masks.
@@ -1941,6 +2070,322 @@
     }
 
 
+    function resetEightBitEffect() {
+      eightBitFrozen = false;
+      eightBitLastSpriteAt = 0;
+      eightBitGhostFrames = [];
+      eightBitLastSegTime = { A: -1, B: -1 };
+      eightBitLastSegmentation = { A: null, B: null };
+      if (eightBitFreezeBtn) eightBitFreezeBtn.classList.remove("active");
+      [eightBitSourceCtx, eightBitMaskCtx, eightBitMaskedCtx, eightBitSpriteCtx, eightBitOutlineCtx, eightBitPixelBgCtx, eightBitFrozenCtx].forEach(bufferCtx => {
+        if (bufferCtx && bufferCtx.canvas) bufferCtx.clearRect(0, 0, bufferCtx.canvas.width, bufferCtx.canvas.height);
+      });
+    }
+
+    function eightBitEnsureBuffer(canvasEl, bufferCtx, w, h) {
+      const nextW = Math.max(1, Math.floor(w));
+      const nextH = Math.max(1, Math.floor(h));
+      if (canvasEl.width !== nextW || canvasEl.height !== nextH) {
+        canvasEl.width = nextW;
+        canvasEl.height = nextH;
+      }
+      bufferCtx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+
+    function eightBitEnsureMainBuffers(w, h) {
+      [
+        [eightBitSourceCanvas, eightBitSourceCtx],
+        [eightBitMaskCanvas, eightBitMaskCtx],
+        [eightBitMaskedCanvas, eightBitMaskedCtx],
+        [eightBitSpriteCanvas, eightBitSpriteCtx],
+        [eightBitOutlineCanvas, eightBitOutlineCtx],
+        [eightBitPixelBgCanvas, eightBitPixelBgCtx]
+      ].forEach(([canvasEl, bufferCtx]) => eightBitEnsureBuffer(canvasEl, bufferCtx, w, h));
+    }
+
+    function eightBitHexToRgb(hex) {
+      const clean = String(hex || "#000000").replace("#", "");
+      const full = clean.length === 3 ? clean.split("").map(ch => ch + ch).join("") : clean.padEnd(6, "0").slice(0, 6);
+      const value = Number.parseInt(full, 16);
+      return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 };
+    }
+
+    function eightBitGetPalette() {
+      if (eightBitColorStyle === "gameboy") return ["#0f380f", "#306230", "#8bac0f", "#9bbc0f"].map(eightBitHexToRgb);
+      if (eightBitColorStyle === "mono") return ["#101010", "#555555", "#aaaaaa", "#ffffff"].map(eightBitHexToRgb);
+      if (eightBitColorStyle === "neon") return ["#050014", "#00f5ff", "#ff00d4", "#fcff00", "#00ff6a", "#7c4dff", "#ff3b30", "#ffffff"].map(eightBitHexToRgb);
+      if (eightBitColorStyle === "custom") return eightBitCustomColorInputs.map(input => eightBitHexToRgb(input.value));
+      if (eightBitColorStyle === "famicom") return ["#0f0f0f", "#f8f8f8", "#e43b44", "#f77622", "#feae34", "#fee761", "#63c74d", "#0099db", "#5b6ee1", "#905ea9", "#a46422", "#4d2b32"].map(eightBitHexToRgb);
+      return null;
+    }
+
+    function eightBitNearestPaletteColor(r, g, b, palette) {
+      let best = palette[0];
+      let bestDistance = Infinity;
+      for (const color of palette) {
+        const dr = r - color.r;
+        const dg = g - color.g;
+        const db = b - color.b;
+        const distance = dr * dr + dg * dg + db * db;
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = color;
+        }
+      }
+      return best;
+    }
+
+    function eightBitQuantizeSmallCanvas(w, h) {
+      if (eightBitColors === "original" && eightBitColorStyle === "original") return;
+      const image = eightBitSmallCtx.getImageData(0, 0, w, h);
+      const data = image.data;
+      const palette = eightBitGetPalette();
+      const count = eightBitColors === "original" ? 32 : Math.max(2, Number(eightBitColors) || 16);
+      const channelLevels = Math.max(2, Math.round(Math.cbrt(count) + 1));
+      const step = 255 / (channelLevels - 1);
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 8) continue;
+        let r = data[i];
+        let g = data[i + 1];
+        let b = data[i + 2];
+        if (palette) {
+          const color = eightBitNearestPaletteColor(r, g, b, palette);
+          r = color.r; g = color.g; b = color.b;
+        } else {
+          r = Math.round(Math.round(r / step) * step);
+          g = Math.round(Math.round(g / step) * step);
+          b = Math.round(Math.round(b / step) * step);
+        }
+        data[i] = r;
+        data[i + 1] = g;
+        data[i + 2] = b;
+      }
+      eightBitSmallCtx.putImageData(image, 0, 0);
+    }
+
+    function eightBitDrawCanvasCover(targetCtx, sourceCanvas, x, y, w, h) {
+      const sw0 = sourceCanvas.width;
+      const sh0 = sourceCanvas.height;
+      if (!sw0 || !sh0 || w <= 0 || h <= 0) return;
+      const scale = Math.max(w / sw0, h / sh0);
+      const sw = w / scale;
+      const sh = h / scale;
+      const sx = (sw0 - sw) / 2;
+      const sy = (sh0 - sh) / 2;
+      targetCtx.drawImage(sourceCanvas, sx, sy, sw, sh, x, y, w, h);
+    }
+
+    function eightBitDrawMaskForFeed(feed, now) {
+      const video = feed.video;
+      const rect = feed.rect;
+      if (!video || !video.videoWidth || !video.videoHeight || rect.w <= 0 || rect.h <= 0) return false;
+      if (!selfieSegmenter) return false;
+      try {
+        if (eightBitLastSegTime[feed.id] !== video.currentTime || !eightBitLastSegmentation[feed.id]) {
+          eightBitLastSegmentation[feed.id] = selfieSegmenter.segmentForVideo(video, now + (feed.id === "B" ? 0.5 : 0));
+          eightBitLastSegTime[feed.id] = video.currentTime;
+        }
+        const categoryMask = eightBitLastSegmentation[feed.id] && eightBitLastSegmentation[feed.id].categoryMask;
+        const data = getMaskArray(categoryMask);
+        const mw = categoryMask && categoryMask.width;
+        const mh = categoryMask && categoryMask.height;
+        if (!data || !mw || !mh) return false;
+        if (eightBitMaskSmallCanvas.width !== mw || eightBitMaskSmallCanvas.height !== mh) {
+          eightBitMaskSmallCanvas.width = mw;
+          eightBitMaskSmallCanvas.height = mh;
+        }
+        const image = eightBitMaskSmallCtx.createImageData(mw, mh);
+        for (let i = 0; i < data.length; i++) {
+          const value = data[i];
+          const body = value > 0.5 || value > 127;
+          const p = i * 4;
+          image.data[p] = 255;
+          image.data[p + 1] = 255;
+          image.data[p + 2] = 255;
+          image.data[p + 3] = body ? 255 : 0;
+        }
+        eightBitMaskSmallCtx.putImageData(image, 0, 0);
+        eightBitMaskCtx.imageSmoothingEnabled = true;
+        eightBitDrawCanvasCover(eightBitMaskCtx, eightBitMaskSmallCanvas, rect.x, rect.y, rect.w, rect.h);
+        return true;
+      } catch (error) {
+        console.warn("8-BIT segmentation unavailable:", error);
+        return false;
+      }
+    }
+
+    function eightBitBuildMask(w, h, now) {
+      eightBitMaskCtx.clearRect(0, 0, w, h);
+      if (!eightBitPersonOnly) {
+        eightBitMaskCtx.fillStyle = "#fff";
+        eightBitMaskCtx.fillRect(0, 0, w, h);
+        return true;
+      }
+      let feeds = getVisibleFaceFeeds(w, h).filter(feed => feed.video && feed.video.videoWidth && feed.video.videoHeight);
+      if (eightBitPersonMode === "largest" && feeds.length > 1) {
+        feeds = feeds.slice().sort((a, b) => (b.rect.w * b.rect.h) - (a.rect.w * a.rect.h)).slice(0, 1);
+      }
+      let drewMask = false;
+      for (const feed of feeds) drewMask = eightBitDrawMaskForFeed(feed, now) || drewMask;
+      if (!drewMask) {
+        eightBitMaskCtx.fillStyle = "#fff";
+        eightBitMaskCtx.fillRect(0, 0, w, h);
+      }
+      return drewMask;
+    }
+
+    function eightBitGetLowResolution(w, h) {
+      let lowW = Math.max(16, Math.floor(w / Math.max(2, eightBitPixelSize)));
+      let lowH = Math.max(12, Math.floor(h / Math.max(2, eightBitPixelSize)));
+      if (eightBitSpriteResolution !== "auto") {
+        const sprite = Number(eightBitSpriteResolution) || 32;
+        const targetW = Math.max(16, Math.floor(w * sprite / 320));
+        if (targetW < lowW) {
+          lowW = targetW;
+          lowH = Math.max(12, Math.floor(lowW * h / w));
+        }
+      }
+      return { lowW: Math.min(lowW, 360), lowH: Math.min(lowH, 240) };
+    }
+
+    function eightBitStoreGhostFrame(w, h, now) {
+      if (!eightBitGhost) return;
+      const ghost = document.createElement("canvas");
+      ghost.width = w;
+      ghost.height = h;
+      ghost.getContext("2d").drawImage(eightBitSpriteCanvas, 0, 0, w, h);
+      eightBitGhostFrames.unshift({ canvas: ghost, time: now });
+      const maxFrames = Math.max(eightBitGhostCount * 8, 8);
+      while (eightBitGhostFrames.length > maxFrames) eightBitGhostFrames.pop();
+    }
+
+    function eightBitBuildSprite(w, h, now) {
+      if (eightBitFrozen && eightBitFrozenCanvas.width && eightBitFrozenCanvas.height) {
+        eightBitSpriteCtx.drawImage(eightBitFrozenCanvas, 0, 0, w, h);
+        return;
+      }
+      const fps = eightBitFps === "live" ? 0 : Number(eightBitFps) || 12;
+      if (fps && now - eightBitLastSpriteAt < 1000 / fps && eightBitSpriteCanvas.width === w && eightBitSpriteCanvas.height === h) return;
+      eightBitLastSpriteAt = now;
+
+      eightBitSourceCtx.drawImage(canvas, 0, 0, w, h);
+      const hasSegmentation = eightBitBuildMask(w, h, now);
+      eightBitMaskedCtx.drawImage(eightBitSourceCanvas, 0, 0, w, h);
+      eightBitMaskedCtx.globalCompositeOperation = "destination-in";
+      eightBitMaskedCtx.drawImage(eightBitMaskCanvas, 0, 0, w, h);
+      eightBitMaskedCtx.globalCompositeOperation = "source-over";
+
+      const { lowW, lowH } = eightBitGetLowResolution(w, h);
+      if (eightBitSmallCanvas.width !== lowW || eightBitSmallCanvas.height !== lowH) {
+        eightBitSmallCanvas.width = lowW;
+        eightBitSmallCanvas.height = lowH;
+      }
+      eightBitSmallCtx.setTransform(1, 0, 0, 1, 0, 0);
+      eightBitSmallCtx.clearRect(0, 0, lowW, lowH);
+      eightBitSmallCtx.imageSmoothingEnabled = true;
+      eightBitSmallCtx.drawImage(eightBitMaskedCanvas, 0, 0, w, h, 0, 0, lowW, lowH);
+      eightBitQuantizeSmallCanvas(lowW, lowH);
+
+      eightBitSpriteCtx.clearRect(0, 0, w, h);
+      eightBitSpriteCtx.imageSmoothingEnabled = false;
+      let dx = 0;
+      let dy = 0;
+      if (eightBitPixelGrid) {
+        const grid = Math.max(2, eightBitPixelSize);
+        dx = Math.round(Math.sin(now * 0.004) * grid) * grid;
+        dy = Math.round(Math.cos(now * 0.003) * grid * 0.5) * grid;
+      }
+      eightBitSpriteCtx.drawImage(eightBitSmallCanvas, 0, 0, lowW, lowH, dx, dy, w, h);
+      eightBitSpriteCtx.globalCompositeOperation = "destination-in";
+      eightBitSpriteCtx.drawImage(eightBitMaskCanvas, dx, dy, w, h);
+      eightBitSpriteCtx.globalCompositeOperation = "source-over";
+      if (!hasSegmentation && eightBitPersonOnly) {
+        eightBitSpriteCtx.save();
+        eightBitSpriteCtx.fillStyle = "rgba(0,0,0,0.5)";
+        eightBitSpriteCtx.fillRect(16, h - 42, 318, 26);
+        eightBitSpriteCtx.fillStyle = "#fff";
+        eightBitSpriteCtx.font = "12px sans-serif";
+        eightBitSpriteCtx.fillText("8-BIT Person Segmentation unavailable", 26, h - 25);
+        eightBitSpriteCtx.restore();
+      }
+      eightBitStoreGhostFrame(w, h, now);
+    }
+
+    function eightBitDrawBackground(w, h) {
+      if (eightBitBackground === "black" || eightBitBackground === "white" || eightBitBackground === "solid") {
+        ctx.fillStyle = eightBitBackground === "black" ? "#000" : eightBitBackground === "white" ? "#fff" : eightBitBackgroundColor;
+        ctx.fillRect(0, 0, w, h);
+      }
+      if (eightBitBackground === "pixel") {
+        const pw = Math.max(24, Math.floor(w / Math.max(2, eightBitPixelSize * 0.55)));
+        const ph = Math.max(18, Math.floor(h / Math.max(2, eightBitPixelSize * 0.55)));
+        if (eightBitPixelBgCanvas.width !== pw || eightBitPixelBgCanvas.height !== ph) {
+          eightBitPixelBgCanvas.width = pw;
+          eightBitPixelBgCanvas.height = ph;
+        }
+        eightBitPixelBgCtx.imageSmoothingEnabled = true;
+        eightBitPixelBgCtx.drawImage(eightBitSourceCanvas, 0, 0, w, h, 0, 0, pw, ph);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(eightBitPixelBgCanvas, 0, 0, pw, ph, 0, 0, w, h);
+        ctx.imageSmoothingEnabled = true;
+      }
+    }
+
+    function eightBitGetOutlineColor() {
+      if (eightBitOutlineColorMode === "white") return "#ffffff";
+      if (eightBitOutlineColorMode === "custom") return eightBitOutlineCustomColor;
+      return "#000000";
+    }
+
+    function eightBitDrawOutline(w, h) {
+      if (!eightBitOutline) return;
+      const step = Math.max(1, eightBitPixelSize * eightBitOutlineWidth);
+      eightBitOutlineCtx.clearRect(0, 0, w, h);
+      for (let ox = -step; ox <= step; ox += step) {
+        for (let oy = -step; oy <= step; oy += step) {
+          if (!ox && !oy) continue;
+          eightBitOutlineCtx.drawImage(eightBitMaskCanvas, ox, oy, w, h);
+        }
+      }
+      eightBitOutlineCtx.globalCompositeOperation = "destination-out";
+      eightBitOutlineCtx.drawImage(eightBitMaskCanvas, 0, 0, w, h);
+      eightBitOutlineCtx.globalCompositeOperation = "source-in";
+      eightBitOutlineCtx.fillStyle = eightBitGetOutlineColor();
+      eightBitOutlineCtx.fillRect(0, 0, w, h);
+      eightBitOutlineCtx.globalCompositeOperation = "source-over";
+      ctx.drawImage(eightBitOutlineCanvas, 0, 0, w, h);
+    }
+
+    function eightBitDrawGhostFrames(w, h, now) {
+      if (!eightBitGhost) return;
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      let drawn = 0;
+      for (const ghost of eightBitGhostFrames) {
+        const age = now - ghost.time;
+        const slot = Math.floor(age / Math.max(50, eightBitGhostDelay));
+        if (slot < 1 || slot > eightBitGhostCount) continue;
+        ctx.globalAlpha = eightBitGhostOpacity * Math.pow(0.62, slot - 1);
+        ctx.drawImage(ghost.canvas, 0, 0, w, h);
+        drawn++;
+        if (drawn >= eightBitGhostCount) break;
+      }
+      ctx.restore();
+    }
+
+    function drawEightBitEffect(w, h, now) {
+      if (!activeFx.has("eightbit")) return;
+      eightBitEnsureMainBuffers(w, h);
+      eightBitBuildSprite(w, h, now);
+      eightBitDrawBackground(w, h);
+      eightBitDrawGhostFrames(w, h, now);
+      ctx.save();
+      ctx.globalAlpha = eightBitOpacity;
+      eightBitDrawOutline(w, h);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(eightBitSpriteCanvas, 0, 0, w, h);
+      ctx.restore();
+    }
     function timeWarpStartProgress() {
       return (timeWarpDirection === "bottom-top" || timeWarpDirection === "right-left") ? 1 : 0;
     }
@@ -2289,6 +2734,7 @@
       drawBase(w, h);
       drawAvatar(w, h);
       applyFx(w, h);
+      drawEightBitEffect(w, h, performance.now());
       timeWarpRender(w, h, performance.now());
       updateFaceMaskSystem(w, h, performance.now());
       drawFaceMasks(ctx, performance.now());
@@ -2385,6 +2831,14 @@
   </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
 
 
 
