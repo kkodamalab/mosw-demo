@@ -2213,9 +2213,12 @@
           eightBitMaskSmallCanvas.height = mh;
         }
         const image = eightBitMaskSmallCtx.createImageData(mw, mh);
+        let maskMax = 0;
+        for (let i = 0; i < data.length; i++) if (data[i] > maskMax) maskMax = data[i];
+        const personThreshold = maskMax <= 1.5 ? 0.5 : 128;
         for (let i = 0; i < data.length; i++) {
           const value = data[i];
-          const body = value > 0.5 || value > 127;
+          const body = value < personThreshold;
           const p = i * 4;
           image.data[p] = 255;
           image.data[p + 1] = 255;
@@ -2920,6 +2923,7 @@
   </script>
 </body>
 </html>
+
 
 
 
