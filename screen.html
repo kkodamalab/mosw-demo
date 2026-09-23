@@ -255,7 +255,7 @@
 
       <div id="eightBitPanel" class="control-row eight-bit-panel">
         <span class="mini-label">8-BIT</span>
-        <button id="eightBitPersonOnlyBtn" class="active">PERSON ON</button>
+        <span class="mini-label">TARGET</span><button class="eightBitTargetBtn" data-target="off">OFF</button><button class="eightBitTargetBtn active" data-target="person">PERSON</button><button class="eightBitTargetBtn" data-target="background">BG</button><button class="eightBitTargetBtn" data-target="all">ALL</button>
         <span class="mini-label">Pixel Size</span><input id="eightBitPixelSize" type="range" min="2" max="32" step="2" value="8">
         <span class="mini-label">Sprite</span><select id="eightBitSpriteResolution"><option value="auto">AUTO</option><option value="16">16 px</option><option value="24">24 px</option><option value="32" selected>32 px</option><option value="48">48 px</option><option value="64">64 px</option><option value="96">96 px</option></select>
         <span class="mini-label">Colors</span><select id="eightBitColors"><option value="2">2</option><option value="4">4</option><option value="8">8</option><option value="16" selected>16</option><option value="32">32</option><option value="original">Original</option></select>
@@ -353,7 +353,7 @@
     const timeWarpFreezeBtn = document.getElementById("timeWarpFreezeBtn");
     const timeWarpResetBtn = document.getElementById("timeWarpResetBtn");
     const eightBitPanel = document.getElementById("eightBitPanel");
-    const eightBitPersonOnlyBtn = document.getElementById("eightBitPersonOnlyBtn");
+    const eightBitTargetBtns = document.querySelectorAll(".eightBitTargetBtn");
     const eightBitPixelSizeInput = document.getElementById("eightBitPixelSize");
     const eightBitSpriteResolutionInput = document.getElementById("eightBitSpriteResolution");
     const eightBitColorsInput = document.getElementById("eightBitColors");
@@ -495,6 +495,10 @@
     const eightBitMaskSmallCtx = eightBitMaskSmallCanvas.getContext("2d");
     const eightBitMaskedCanvas = document.createElement("canvas");
     const eightBitMaskedCtx = eightBitMaskedCanvas.getContext("2d");
+    const eightBitFullCanvas = document.createElement("canvas");
+    const eightBitFullCtx = eightBitFullCanvas.getContext("2d");
+    const eightBitLivePersonCanvas = document.createElement("canvas");
+    const eightBitLivePersonCtx = eightBitLivePersonCanvas.getContext("2d");
     const eightBitSmallCanvas = document.createElement("canvas");
     const eightBitSmallCtx = eightBitSmallCanvas.getContext("2d", { willReadFrequently: true });
     const eightBitSpriteCanvas = document.createElement("canvas");
@@ -505,7 +509,7 @@
     const eightBitPixelBgCtx = eightBitPixelBgCanvas.getContext("2d");
     const eightBitFrozenCanvas = document.createElement("canvas");
     const eightBitFrozenCtx = eightBitFrozenCanvas.getContext("2d");
-    let eightBitPersonOnly = true;
+    let eightBitTarget = "person";
     let eightBitPixelSize = 8;
     let eightBitSpriteResolution = "32";
     let eightBitColors = "16";
@@ -843,7 +847,21 @@
       el.oninput = updateEightBitControls;
       el.onchange = updateEightBitControls;
     });
-    eightBitPersonOnlyBtn.onclick = () => { eightBitPersonOnly = !eightBitPersonOnly; eightBitPersonOnlyBtn.textContent = eightBitPersonOnly ? "PERSON ON" : "PERSON OFF"; eightBitPersonOnlyBtn.classList.toggle("active", eightBitPersonOnly); eightBitGhostFrames = []; };
+    function updateEightBitTargetButtons() {
+      eightBitTargetBtns.forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.target === eightBitTarget);
+      });
+    }
+
+    eightBitTargetBtns.forEach(btn => {
+      btn.onclick = () => {
+        eightBitTarget = btn.dataset.target || "person";
+        eightBitGhostFrames = [];
+        eightBitLastSpriteAt = 0;
+        updateEightBitTargetButtons();
+      };
+    });
+    updateEightBitTargetButtons();
     eightBitOutlineBtn.onclick = () => { eightBitOutline = !eightBitOutline; eightBitOutlineBtn.textContent = eightBitOutline ? "OUTLINE ON" : "OUTLINE OFF"; eightBitOutlineBtn.classList.toggle("active", eightBitOutline); };
     eightBitGridBtn.onclick = () => { eightBitPixelGrid = !eightBitPixelGrid; eightBitGridBtn.textContent = eightBitPixelGrid ? "GRID ON" : "GRID OFF"; eightBitGridBtn.classList.toggle("active", eightBitPixelGrid); };
     eightBitGhostBtn.onclick = () => { eightBitGhost = !eightBitGhost; eightBitGhostBtn.textContent = eightBitGhost ? "GHOST ON" : "GHOST OFF"; eightBitGhostBtn.classList.toggle("active", eightBitGhost); if (!eightBitGhost) eightBitGhostFrames = []; };
@@ -2077,7 +2095,7 @@
       eightBitLastSegTime = { A: -1, B: -1 };
       eightBitLastSegmentation = { A: null, B: null };
       if (eightBitFreezeBtn) eightBitFreezeBtn.classList.remove("active");
-      [eightBitSourceCtx, eightBitMaskCtx, eightBitMaskedCtx, eightBitSpriteCtx, eightBitOutlineCtx, eightBitPixelBgCtx, eightBitFrozenCtx].forEach(bufferCtx => {
+      [eightBitSourceCtx, eightBitMaskCtx, eightBitMaskedCtx, eightBitFullCtx, eightBitLivePersonCtx, eightBitSpriteCtx, eightBitOutlineCtx, eightBitPixelBgCtx, eightBitFrozenCtx].forEach(bufferCtx => {
         if (bufferCtx && bufferCtx.canvas) bufferCtx.clearRect(0, 0, bufferCtx.canvas.width, bufferCtx.canvas.height);
       });
     }
@@ -2214,20 +2232,15 @@
       }
     }
 
-    function eightBitBuildMask(w, h, now) {
+    function eightBitBuildMask(w, h, now, fallbackFull = true) {
       eightBitMaskCtx.clearRect(0, 0, w, h);
-      if (!eightBitPersonOnly) {
-        eightBitMaskCtx.fillStyle = "#fff";
-        eightBitMaskCtx.fillRect(0, 0, w, h);
-        return true;
-      }
       let feeds = getVisibleFaceFeeds(w, h).filter(feed => feed.video && feed.video.videoWidth && feed.video.videoHeight);
       if (eightBitPersonMode === "largest" && feeds.length > 1) {
         feeds = feeds.slice().sort((a, b) => (b.rect.w * b.rect.h) - (a.rect.w * a.rect.h)).slice(0, 1);
       }
       let drewMask = false;
       for (const feed of feeds) drewMask = eightBitDrawMaskForFeed(feed, now) || drewMask;
-      if (!drewMask) {
+      if (!drewMask && fallbackFull) {
         eightBitMaskCtx.fillStyle = "#fff";
         eightBitMaskCtx.fillRect(0, 0, w, h);
       }
@@ -2248,8 +2261,25 @@
       return { lowW: Math.min(lowW, 360), lowH: Math.min(lowH, 240) };
     }
 
+    function eightBitPixelateCanvas(sourceCanvas, targetCtx, w, h) {
+      const { lowW, lowH } = eightBitGetLowResolution(w, h);
+      if (eightBitSmallCanvas.width !== lowW || eightBitSmallCanvas.height !== lowH) {
+        eightBitSmallCanvas.width = lowW;
+        eightBitSmallCanvas.height = lowH;
+      }
+      eightBitSmallCtx.setTransform(1, 0, 0, 1, 0, 0);
+      eightBitSmallCtx.clearRect(0, 0, lowW, lowH);
+      eightBitSmallCtx.imageSmoothingEnabled = true;
+      eightBitSmallCtx.drawImage(sourceCanvas, 0, 0, w, h, 0, 0, lowW, lowH);
+      eightBitQuantizeSmallCanvas(lowW, lowH);
+      targetCtx.clearRect(0, 0, w, h);
+      targetCtx.imageSmoothingEnabled = false;
+      targetCtx.drawImage(eightBitSmallCanvas, 0, 0, lowW, lowH, 0, 0, w, h);
+      targetCtx.imageSmoothingEnabled = true;
+    }
+
     function eightBitStoreGhostFrame(w, h, now) {
-      if (!eightBitGhost) return;
+      if (!eightBitGhost || eightBitTarget === "off") return;
       const ghost = document.createElement("canvas");
       ghost.width = w;
       ghost.height = h;
@@ -2259,47 +2289,77 @@
       while (eightBitGhostFrames.length > maxFrames) eightBitGhostFrames.pop();
     }
 
+    function eightBitBuildPersonSprite(w, h) {
+      eightBitMaskedCtx.clearRect(0, 0, w, h);
+      eightBitMaskedCtx.drawImage(eightBitSourceCanvas, 0, 0, w, h);
+      eightBitMaskedCtx.globalCompositeOperation = "destination-in";
+      eightBitMaskedCtx.drawImage(eightBitMaskCanvas, 0, 0, w, h);
+      eightBitMaskedCtx.globalCompositeOperation = "source-over";
+      eightBitPixelateCanvas(eightBitMaskedCanvas, eightBitSpriteCtx, w, h);
+      eightBitSpriteCtx.globalCompositeOperation = "destination-in";
+      eightBitSpriteCtx.drawImage(eightBitMaskCanvas, 0, 0, w, h);
+      eightBitSpriteCtx.globalCompositeOperation = "source-over";
+    }
+
+    function eightBitBuildBackgroundSprite(w, h) {
+      eightBitPixelateCanvas(eightBitSourceCanvas, eightBitSpriteCtx, w, h);
+    }
+
+    function eightBitDrawLivePerson(w, h) {
+      eightBitLivePersonCtx.clearRect(0, 0, w, h);
+      eightBitLivePersonCtx.drawImage(eightBitSourceCanvas, 0, 0, w, h);
+      eightBitLivePersonCtx.globalCompositeOperation = "destination-in";
+      eightBitLivePersonCtx.drawImage(eightBitMaskCanvas, 0, 0, w, h);
+      eightBitLivePersonCtx.globalCompositeOperation = "source-over";
+      ctx.drawImage(eightBitLivePersonCanvas, 0, 0, w, h);
+    }
+
+    function eightBitBuildAllSprite(w, h) {
+      eightBitPixelateCanvas(eightBitSourceCanvas, eightBitSpriteCtx, w, h);
+    }
+
+    function eightBitApplyPixelGrid(w, h, now) {
+      if (!eightBitPixelGrid || eightBitTarget === "off") return;
+      const grid = Math.max(2, eightBitPixelSize);
+      const dx = Math.round(Math.sin(now * 0.004) * grid) * grid;
+      const dy = Math.round(Math.cos(now * 0.003) * grid * 0.5) * grid;
+      if (!dx && !dy) return;
+      eightBitFullCtx.clearRect(0, 0, w, h);
+      eightBitFullCtx.drawImage(eightBitSpriteCanvas, 0, 0, w, h);
+      eightBitSpriteCtx.clearRect(0, 0, w, h);
+      eightBitSpriteCtx.drawImage(eightBitFullCanvas, dx, dy, w, h);
+      if (eightBitTarget === "person") {
+        eightBitSpriteCtx.globalCompositeOperation = "destination-in";
+        eightBitSpriteCtx.drawImage(eightBitMaskCanvas, dx, dy, w, h);
+        eightBitSpriteCtx.globalCompositeOperation = "source-over";
+      }
+    }
+
     function eightBitBuildSprite(w, h, now) {
+      eightBitSourceCtx.clearRect(0, 0, w, h);
+      eightBitSourceCtx.drawImage(canvas, 0, 0, w, h);
+
+      if (eightBitTarget === "off") return;
+
+      const needsMask = eightBitTarget === "person" || eightBitTarget === "background" || (eightBitTarget === "all" && eightBitOutline);
+      const hasSegmentation = needsMask ? eightBitBuildMask(w, h, now, eightBitTarget !== "all") : false;
+
       if (eightBitFrozen && eightBitFrozenCanvas.width && eightBitFrozenCanvas.height) {
         eightBitSpriteCtx.drawImage(eightBitFrozenCanvas, 0, 0, w, h);
         return;
       }
       const fps = eightBitFps === "live" ? 0 : Number(eightBitFps) || 12;
-      if (fps && now - eightBitLastSpriteAt < 1000 / fps && eightBitSpriteCanvas.width === w && eightBitSpriteCanvas.height === h) return;
+      const shouldHoldSprite = fps && now - eightBitLastSpriteAt < 1000 / fps && eightBitSpriteCanvas.width === w && eightBitSpriteCanvas.height === h;
+      if (shouldHoldSprite) return;
       eightBitLastSpriteAt = now;
-
-      eightBitSourceCtx.drawImage(canvas, 0, 0, w, h);
-      const hasSegmentation = eightBitBuildMask(w, h, now);
-      eightBitMaskedCtx.drawImage(eightBitSourceCanvas, 0, 0, w, h);
-      eightBitMaskedCtx.globalCompositeOperation = "destination-in";
-      eightBitMaskedCtx.drawImage(eightBitMaskCanvas, 0, 0, w, h);
-      eightBitMaskedCtx.globalCompositeOperation = "source-over";
-
-      const { lowW, lowH } = eightBitGetLowResolution(w, h);
-      if (eightBitSmallCanvas.width !== lowW || eightBitSmallCanvas.height !== lowH) {
-        eightBitSmallCanvas.width = lowW;
-        eightBitSmallCanvas.height = lowH;
-      }
-      eightBitSmallCtx.setTransform(1, 0, 0, 1, 0, 0);
-      eightBitSmallCtx.clearRect(0, 0, lowW, lowH);
-      eightBitSmallCtx.imageSmoothingEnabled = true;
-      eightBitSmallCtx.drawImage(eightBitMaskedCanvas, 0, 0, w, h, 0, 0, lowW, lowH);
-      eightBitQuantizeSmallCanvas(lowW, lowH);
-
       eightBitSpriteCtx.clearRect(0, 0, w, h);
-      eightBitSpriteCtx.imageSmoothingEnabled = false;
-      let dx = 0;
-      let dy = 0;
-      if (eightBitPixelGrid) {
-        const grid = Math.max(2, eightBitPixelSize);
-        dx = Math.round(Math.sin(now * 0.004) * grid) * grid;
-        dy = Math.round(Math.cos(now * 0.003) * grid * 0.5) * grid;
-      }
-      eightBitSpriteCtx.drawImage(eightBitSmallCanvas, 0, 0, lowW, lowH, dx, dy, w, h);
-      eightBitSpriteCtx.globalCompositeOperation = "destination-in";
-      eightBitSpriteCtx.drawImage(eightBitMaskCanvas, dx, dy, w, h);
-      eightBitSpriteCtx.globalCompositeOperation = "source-over";
-      if (!hasSegmentation && eightBitPersonOnly) {
+
+      if (eightBitTarget === "person") eightBitBuildPersonSprite(w, h);
+      if (eightBitTarget === "background") eightBitBuildBackgroundSprite(w, h);
+      if (eightBitTarget === "all") eightBitBuildAllSprite(w, h);
+      eightBitApplyPixelGrid(w, h, now);
+
+      if (!hasSegmentation && (eightBitTarget === "person" || eightBitTarget === "background")) {
         eightBitSpriteCtx.save();
         eightBitSpriteCtx.fillStyle = "rgba(0,0,0,0.5)";
         eightBitSpriteCtx.fillRect(16, h - 42, 318, 26);
@@ -2312,6 +2372,7 @@
     }
 
     function eightBitDrawBackground(w, h) {
+      if (eightBitTarget !== "person") return;
       if (eightBitBackground === "black" || eightBitBackground === "white" || eightBitBackground === "solid") {
         ctx.fillStyle = eightBitBackground === "black" ? "#000" : eightBitBackground === "white" ? "#fff" : eightBitBackgroundColor;
         ctx.fillRect(0, 0, w, h);
@@ -2338,7 +2399,7 @@
     }
 
     function eightBitDrawOutline(w, h) {
-      if (!eightBitOutline) return;
+      if (!eightBitOutline || eightBitTarget === "off") return;
       const step = Math.max(1, eightBitPixelSize * eightBitOutlineWidth);
       eightBitOutlineCtx.clearRect(0, 0, w, h);
       for (let ox = -step; ox <= step; ox += step) {
@@ -2357,7 +2418,7 @@
     }
 
     function eightBitDrawGhostFrames(w, h, now) {
-      if (!eightBitGhost) return;
+      if (!eightBitGhost || eightBitTarget === "off") return;
       ctx.save();
       ctx.globalCompositeOperation = "screen";
       let drawn = 0;
@@ -2374,18 +2435,46 @@
     }
 
     function drawEightBitEffect(w, h, now) {
-      if (!activeFx.has("eightbit")) return;
+      if (!activeFx.has("eightbit") || eightBitTarget === "off") return;
       eightBitEnsureMainBuffers(w, h);
       eightBitBuildSprite(w, h, now);
-      eightBitDrawBackground(w, h);
-      eightBitDrawGhostFrames(w, h, now);
-      ctx.save();
-      ctx.globalAlpha = eightBitOpacity;
-      eightBitDrawOutline(w, h);
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(eightBitSpriteCanvas, 0, 0, w, h);
-      ctx.restore();
+      if (eightBitTarget === "off") return;
+
+      if (eightBitTarget === "person") {
+        eightBitDrawBackground(w, h);
+        eightBitDrawGhostFrames(w, h, now);
+        ctx.save();
+        ctx.globalAlpha = eightBitOpacity;
+        eightBitDrawOutline(w, h);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(eightBitSpriteCanvas, 0, 0, w, h);
+        ctx.restore();
+        return;
+      }
+
+      if (eightBitTarget === "background") {
+        eightBitDrawGhostFrames(w, h, now);
+        ctx.save();
+        ctx.globalAlpha = eightBitOpacity;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(eightBitSpriteCanvas, 0, 0, w, h);
+        ctx.restore();
+        eightBitDrawLivePerson(w, h);
+        eightBitDrawOutline(w, h);
+        return;
+      }
+
+      if (eightBitTarget === "all") {
+        eightBitDrawGhostFrames(w, h, now);
+        ctx.save();
+        ctx.globalAlpha = eightBitOpacity;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(eightBitSpriteCanvas, 0, 0, w, h);
+        ctx.restore();
+        eightBitDrawOutline(w, h);
+      }
     }
+
     function timeWarpStartProgress() {
       return (timeWarpDirection === "bottom-top" || timeWarpDirection === "right-left") ? 1 : 0;
     }
@@ -2831,6 +2920,10 @@
   </script>
 </body>
 </html>
+
+
+
+
 
 
 
