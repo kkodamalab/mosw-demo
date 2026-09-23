@@ -70,6 +70,14 @@
       color: white;
       font-size: 12px;
       user-select: none;
+          opacity: 1;
+      pointer-events: auto;
+      transition: opacity 0.45s ease;
+    }
+
+    #controls.ui-hidden {
+      opacity: 0;
+      pointer-events: none;
     }
 
     .control-row {
@@ -80,6 +88,21 @@
     }
 
     button, select, input { font-size: 13px; }
+
+    .controlLink {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      padding: 0 13px;
+      border-radius: 9px;
+      background: rgba(0,208,132,0.22);
+      color: #9dffd0;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
 
     button {
       border: 0;
@@ -268,6 +291,7 @@
 
     const videoA = document.getElementById("cameraA");
     const videoB = document.getElementById("cameraB");
+    const controls = document.getElementById("controls");
     const startBtn = document.getElementById("startBtn");
     const syncBtn = document.getElementById("syncBtn");
     const gestureBtn = document.getElementById("gestureBtn");
@@ -314,6 +338,7 @@
     let gestureEnabled = true;
     let t = 0;
     let frame = 0;
+    let uiHideTimer = null;
 
     let handLandmarker = null;
     let poseLandmarker = null;
@@ -567,6 +592,25 @@
       streamA = await startCamera(videoA, streamA, camSelectA.value);
     };
 
+    function hideUI() {
+      controls.classList.add("ui-hidden");
+    }
+
+    function scheduleHideUI() {
+      clearTimeout(uiHideTimer);
+      uiHideTimer = setTimeout(hideUI, 3000);
+    }
+
+    function showUI() {
+      controls.classList.remove("ui-hidden");
+      scheduleHideUI();
+    }
+
+    ["mousemove", "mousedown", "touchstart", "keydown"].forEach(eventName => {
+      window.addEventListener(eventName, showUI, { passive: true });
+    });
+
+    showUI();
     camSelectB.onchange = async () => {
       streamB = await startCamera(videoB, streamB, camSelectB.value);
     };
@@ -2341,6 +2385,11 @@
   </script>
 </body>
 </html>
+
+
+
+
+
 
 
 
