@@ -9,6 +9,8 @@
     body { box-sizing: border-box; padding: 18px 12px 32px; }
     #app { width: 100%; max-width: 760px; margin: 0 auto; }
     h1 { margin: 0 0 14px; font-size: 18px; letter-spacing: .08em; }
+    .topBar { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .screenLink { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 13px; border: 1px solid rgba(0,208,132,.6); border-radius: 11px; background: rgba(0,208,132,.16); color: #7dffbf; font-size: 13px; font-weight: 800; text-decoration: none; white-space: nowrap; }
     .tabs, .buttonRow, .grid, .presetGrid { display: grid; gap: 8px; }
     .tabs { grid-template-columns: repeat(3, 1fr); margin-bottom: 12px; }
     .tabBtn, button, select, input, textarea { font: inherit; }
@@ -28,12 +30,12 @@
     .toggleGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
     .toggleGrid label { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 8px; border-radius: 10px; background: #202020; }
     #status { min-height: 22px; margin-top: 10px; color: #00e676; text-align: center; font-size: 13px; }
-    @media (max-width: 520px) { .grid, .presetGrid, .buttonRow { grid-template-columns: 1fr; } .toggleGrid { grid-template-columns: 1fr; } }
+    @media (max-width: 520px) { .topBar { grid-template-columns: 1fr; } .screenLink { width: 100%; box-sizing: border-box; } .grid, .presetGrid, .buttonRow { grid-template-columns: 1fr; } .toggleGrid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <div id="app">
-    <h1>TEXT OVERLAY</h1>
+    <div class="topBar"><h1>TEXT OVERLAY</h1><a class="screenLink" href="screen.html" target="_blank" rel="noopener">OPEN VJ SCREEN</a></div>
     <div class="tabs"><button class="tabBtn active" data-layer="layer1">Layer 1</button><button class="tabBtn" data-layer="layer2">Layer 2</button><button class="tabBtn" data-layer="layer3">Layer 3</button></div>
     <textarea id="textInput" placeholder="表示する文字を入力"></textarea>
     <div class="presetGrid" id="presetButtons"></div>
@@ -80,3 +82,4 @@
   </script>
 </body>
 </html>
+

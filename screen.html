@@ -104,6 +104,24 @@
 
     input[type="range"] { width: 120px; }
 
+    input[type="color"] {
+      width: 42px;
+      height: 32px;
+      padding: 0;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+    }
+
+    .time-warp-panel {
+      display: none;
+      max-width: 980px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.18);
+    }
+
+    .time-warp-panel.active { display: flex; }
+
     .mini-label {
       opacity: 0.9;
       font-size: 12px;
@@ -159,6 +177,7 @@
     <div id="controls">
       <div class="control-row">
         <button id="startBtn">カメラ開始</button>
+        <a class="controlLink" href="text.html" target="_blank" rel="noopener">TEXT CTRL</a>
         <button class="camBtn active" data-mode="A">A</button>
         <button class="camBtn" data-mode="B">B</button>
         <button class="camBtn" data-mode="split">Split</button>
@@ -184,7 +203,28 @@
         <button class="fxBtn" data-fx="pixel">7 Pixel</button>
         <button class="fxBtn" data-fx="strobe">8 Strobe</button>
         <button class="fxBtn" data-fx="zoom">9 Zoom</button>
+        <button class="fxBtn" data-fx="timewarp">T TIME WARP</button>
         <span class="mini-label">Power</span><input id="powerSlider" type="range" min="0" max="100" value="55">
+      </div>
+
+      <div id="timeWarpPanel" class="control-row time-warp-panel">
+        <span class="mini-label">TIME WARP</span>
+        <span class="mini-label">Direction</span><select id="timeWarpDirection"><option value="top-bottom">Top → Bottom</option><option value="bottom-top">Bottom → Top</option><option value="left-right">Left → Right</option><option value="right-left">Right → Left</option></select>
+        <span class="mini-label" id="timeWarpScanLabel">SCAN TIME: 4.0 sec</span><input id="timeWarpScanTime" type="range" min="0.5" max="15" step="0.1" value="4">
+        <span class="mini-label">Scan Bar</span><button id="timeWarpBarBtn" class="active">BAR ON</button><input id="timeWarpBarColor" type="color" value="#00f5ff">
+        <span class="mini-label">Thickness</span><input id="timeWarpBarThickness" type="range" min="1" max="24" step="1" value="4">
+        <button id="timeWarpGlowBtn" class="active">GLOW ON</button>
+        <span class="mini-label">Display</span><select id="timeWarpDisplay"><option value="live-warp">Live + Warp</option><option value="warp-only">Warp Only</option></select>
+        <span class="mini-label">Opacity</span><input id="timeWarpOpacity" type="range" min="0" max="100" value="50">
+        <span class="mini-label">Blend</span><select id="timeWarpBlend"><option value="source-over">Normal</option><option value="screen">Screen</option><option value="multiply">Multiply</option><option value="overlay">Overlay</option><option value="difference">Difference</option><option value="lighten">Lighten</option></select>
+        <button id="timeWarpTrailBtn">TRAIL OFF</button>
+        <span class="mini-label">Decay</span><input id="timeWarpTrailDecay" type="range" min="1" max="98" value="82">
+        <button id="timeWarpGhostBtn">GHOST OFF</button>
+        <span class="mini-label">Ghosts</span><input id="timeWarpGhostCount" type="range" min="1" max="5" value="3">
+        <span class="mini-label">After</span><select id="timeWarpAfter"><option value="hold">Hold</option><option value="auto-reset">Auto Reset</option><option value="loop">Loop</option></select>
+        <button id="timeWarpPingPongBtn">PING-PONG OFF</button>
+        <span class="mini-label">SYNC</span><select id="timeWarpSyncBeats"><option value="1">1 beat</option><option value="2">2 beats</option><option value="4" selected>4 beats</option><option value="8">8 beats</option></select>
+        <button id="timeWarpStartBtn">START SCAN</button><button id="timeWarpFreezeBtn">FREEZE</button><button id="timeWarpResetBtn">RESET WARP</button>
       </div>
 
       <div class="control-row">
@@ -242,6 +282,27 @@
     const message = document.getElementById("message");
     const gestureStatus = document.getElementById("gestureStatus");
     const textOverlay = document.getElementById("textOverlay");
+    const timeWarpPanel = document.getElementById("timeWarpPanel");
+    const timeWarpDirectionInput = document.getElementById("timeWarpDirection");
+    const timeWarpScanTimeInput = document.getElementById("timeWarpScanTime");
+    const timeWarpScanLabel = document.getElementById("timeWarpScanLabel");
+    const timeWarpBarBtn = document.getElementById("timeWarpBarBtn");
+    const timeWarpBarColorInput = document.getElementById("timeWarpBarColor");
+    const timeWarpBarThicknessInput = document.getElementById("timeWarpBarThickness");
+    const timeWarpGlowBtn = document.getElementById("timeWarpGlowBtn");
+    const timeWarpDisplayInput = document.getElementById("timeWarpDisplay");
+    const timeWarpOpacityInput = document.getElementById("timeWarpOpacity");
+    const timeWarpBlendInput = document.getElementById("timeWarpBlend");
+    const timeWarpTrailBtn = document.getElementById("timeWarpTrailBtn");
+    const timeWarpTrailDecayInput = document.getElementById("timeWarpTrailDecay");
+    const timeWarpGhostBtn = document.getElementById("timeWarpGhostBtn");
+    const timeWarpGhostCountInput = document.getElementById("timeWarpGhostCount");
+    const timeWarpAfterInput = document.getElementById("timeWarpAfter");
+    const timeWarpPingPongBtn = document.getElementById("timeWarpPingPongBtn");
+    const timeWarpSyncBeatsInput = document.getElementById("timeWarpSyncBeats");
+    const timeWarpStartBtn = document.getElementById("timeWarpStartBtn");
+    const timeWarpFreezeBtn = document.getElementById("timeWarpFreezeBtn");
+    const timeWarpResetBtn = document.getElementById("timeWarpResetBtn");
 
     let streamA = null;
     let streamB = null;
@@ -315,6 +376,39 @@
     let handTracks = new Map();
     let nextHandTrackId = 1;
     let gestureReactionEmojis = [];
+
+    // ========================================
+    // TIME WARP EFFECT SYSTEM
+    // ========================================
+    const timeWarpCanvas = document.createElement("canvas");
+    const timeWarpCtx = timeWarpCanvas.getContext("2d");
+    const timeWarpSourceCanvas = document.createElement("canvas");
+    const timeWarpSourceCtx = timeWarpSourceCanvas.getContext("2d");
+    const timeWarpTrailCanvas = document.createElement("canvas");
+    const timeWarpTrailCtx = timeWarpTrailCanvas.getContext("2d");
+    let timeWarpDirection = "top-bottom";
+    let timeWarpScanTime = 4;
+    let timeWarpShowBar = true;
+    let timeWarpBarColor = "#00f5ff";
+    let timeWarpBarThickness = 4;
+    let timeWarpGlow = true;
+    let timeWarpDisplayMode = "live-warp";
+    let timeWarpOpacity = 0.5;
+    let timeWarpBlendMode = "source-over";
+    let timeWarpTrail = false;
+    let timeWarpTrailDecay = 0.82;
+    let timeWarpMultiGhost = false;
+    let timeWarpGhostCount = 3;
+    let timeWarpAfterScan = "hold";
+    let timeWarpPingPong = false;
+    let timeWarpSyncBeats = 4;
+    let timeWarpRunning = false;
+    let timeWarpFrozen = false;
+    let timeWarpCompleted = false;
+    let timeWarpCompletedAt = 0;
+    let timeWarpScanStart = performance.now();
+    let timeWarpLastProgress = timeWarpStartProgress();
+    let timeWarpGhostBuffers = [];
 
     // ========================================
     // TEXT OVERLAY SYSTEM
@@ -490,15 +584,22 @@
         btn.classList.toggle("active", activeFx.has(btn.dataset.fx));
       });
       clearFxBtn.classList.toggle("active", activeFx.size === 0);
+      timeWarpPanel.classList.toggle("active", activeFx.has("timewarp"));
     }
 
     function toggleFx(nextFx) {
+      const willEnable = !activeFx.has(nextFx);
       activeFx.has(nextFx) ? activeFx.delete(nextFx) : activeFx.add(nextFx);
+      if (nextFx === "timewarp") {
+        if (willEnable) timeWarpStartScan();
+        else timeWarpReset(false);
+      }
       updateFxButtons();
     }
 
     function clearFx() {
       activeFx.clear();
+      timeWarpReset(false);
       updateFxButtons();
     }
 
@@ -551,6 +652,35 @@
       power = Number(powerSlider.value) / 100;
     };
 
+    function updateTimeWarpControls() {
+      timeWarpDirection = timeWarpDirectionInput.value;
+      timeWarpScanTime = Number(timeWarpScanTimeInput.value) || 4;
+      timeWarpBarColor = timeWarpBarColorInput.value || "#00f5ff";
+      timeWarpBarThickness = Number(timeWarpBarThicknessInput.value) || 4;
+      timeWarpDisplayMode = timeWarpDisplayInput.value;
+      timeWarpOpacity = Number(timeWarpOpacityInput.value) / 100;
+      timeWarpBlendMode = timeWarpBlendInput.value;
+      timeWarpTrailDecay = Number(timeWarpTrailDecayInput.value) / 100;
+      timeWarpGhostCount = Number(timeWarpGhostCountInput.value) || 3;
+      timeWarpAfterScan = timeWarpAfterInput.value;
+      timeWarpSyncBeats = Number(timeWarpSyncBeatsInput.value) || 4;
+      timeWarpScanLabel.textContent = `SCAN TIME: ${timeWarpGetScanTime().toFixed(1)} sec`;
+    }
+
+    [timeWarpDirectionInput, timeWarpScanTimeInput, timeWarpBarColorInput, timeWarpBarThicknessInput, timeWarpDisplayInput, timeWarpOpacityInput, timeWarpBlendInput, timeWarpTrailDecayInput, timeWarpGhostCountInput, timeWarpAfterInput, timeWarpSyncBeatsInput].forEach(el => {
+      el.oninput = updateTimeWarpControls;
+      el.onchange = updateTimeWarpControls;
+    });
+    timeWarpBarBtn.onclick = () => { timeWarpShowBar = !timeWarpShowBar; timeWarpBarBtn.textContent = timeWarpShowBar ? "BAR ON" : "BAR OFF"; timeWarpBarBtn.classList.toggle("active", timeWarpShowBar); };
+    timeWarpGlowBtn.onclick = () => { timeWarpGlow = !timeWarpGlow; timeWarpGlowBtn.textContent = timeWarpGlow ? "GLOW ON" : "GLOW OFF"; timeWarpGlowBtn.classList.toggle("active", timeWarpGlow); };
+    timeWarpTrailBtn.onclick = () => { timeWarpTrail = !timeWarpTrail; timeWarpTrailBtn.textContent = timeWarpTrail ? "TRAIL ON" : "TRAIL OFF"; timeWarpTrailBtn.classList.toggle("active", timeWarpTrail); };
+    timeWarpGhostBtn.onclick = () => { timeWarpMultiGhost = !timeWarpMultiGhost; timeWarpGhostBtn.textContent = timeWarpMultiGhost ? "GHOST ON" : "GHOST OFF"; timeWarpGhostBtn.classList.toggle("active", timeWarpMultiGhost); };
+    timeWarpPingPongBtn.onclick = () => { timeWarpPingPong = !timeWarpPingPong; timeWarpPingPongBtn.textContent = timeWarpPingPong ? "PING-PONG ON" : "PING-PONG OFF"; timeWarpPingPongBtn.classList.toggle("active", timeWarpPingPong); };
+    timeWarpStartBtn.onclick = () => timeWarpStartScan();
+    timeWarpFreezeBtn.onclick = () => { timeWarpFrozen = !timeWarpFrozen; timeWarpFreezeBtn.textContent = timeWarpFrozen ? "RELEASE" : "FREEZE"; timeWarpFreezeBtn.classList.toggle("active", timeWarpFrozen); };
+    timeWarpResetBtn.onclick = () => timeWarpReset(true);
+    updateTimeWarpControls();
+
     window.addEventListener("keydown", e => {
       if (e.key === "0") clearFx();
       if (e.key === "1") toggleFx("rgb");
@@ -562,6 +692,7 @@
       if (e.key === "7") toggleFx("pixel");
       if (e.key === "8") toggleFx("strobe");
       if (e.key === "9") toggleFx("zoom");
+      if (e.key.toLowerCase() === "t") toggleFx("timewarp");
       if (e.key.toLowerCase() === "s") syncBtn.click();
       if (e.key.toLowerCase() === "g") gestureBtn.click();
       // F is already used for fullscreen, so M toggles participant face masks.
@@ -1765,6 +1896,181 @@
       ctx.restore();
     }
 
+
+    function timeWarpStartProgress() {
+      return (timeWarpDirection === "bottom-top" || timeWarpDirection === "right-left") ? 1 : 0;
+    }
+
+    function timeWarpEnsureBuffers(w, h) {
+      if (timeWarpCanvas.width === w && timeWarpCanvas.height === h) return;
+      [timeWarpCanvas, timeWarpSourceCanvas, timeWarpTrailCanvas].forEach(c => { c.width = w; c.height = h; });
+      timeWarpCtx.clearRect(0, 0, w, h);
+      timeWarpSourceCtx.clearRect(0, 0, w, h);
+      timeWarpTrailCtx.clearRect(0, 0, w, h);
+      timeWarpGhostBuffers = [];
+      timeWarpLastProgress = timeWarpStartProgress();
+      timeWarpRunning = activeFx.has("timewarp");
+      timeWarpCompleted = false;
+      timeWarpScanStart = performance.now();
+    }
+
+    function timeWarpGetScanTime() {
+      if (!sync) return timeWarpScanTime;
+      const fallbackBpm = 120;
+      return (60 / fallbackBpm) * timeWarpSyncBeats;
+    }
+
+    function timeWarpStartScan() {
+      timeWarpCtx.clearRect(0, 0, timeWarpCanvas.width, timeWarpCanvas.height);
+      timeWarpRunning = true;
+      timeWarpFrozen = false;
+      timeWarpCompleted = false;
+      timeWarpCompletedAt = 0;
+      timeWarpLastProgress = timeWarpStartProgress();
+      timeWarpScanStart = performance.now();
+      timeWarpFreezeBtn.textContent = "FREEZE";
+      timeWarpFreezeBtn.classList.remove("active");
+    }
+
+    function timeWarpReset(restart) {
+      timeWarpCtx.clearRect(0, 0, timeWarpCanvas.width, timeWarpCanvas.height);
+      timeWarpTrailCtx.clearRect(0, 0, timeWarpTrailCanvas.width, timeWarpTrailCanvas.height);
+      timeWarpGhostBuffers = [];
+      timeWarpRunning = !!restart;
+      timeWarpFrozen = false;
+      timeWarpCompleted = false;
+      timeWarpCompletedAt = 0;
+      timeWarpLastProgress = timeWarpStartProgress();
+      timeWarpScanStart = performance.now();
+      timeWarpFreezeBtn.textContent = "FREEZE";
+      timeWarpFreezeBtn.classList.remove("active");
+    }
+
+    function timeWarpReverseDirection() {
+      const next = {
+        "top-bottom": "bottom-top",
+        "bottom-top": "top-bottom",
+        "left-right": "right-left",
+        "right-left": "left-right"
+      };
+      timeWarpDirection = next[timeWarpDirection] || "top-bottom";
+      timeWarpDirectionInput.value = timeWarpDirection;
+    }
+
+    function timeWarpStoreGhost(w, h) {
+      if (!timeWarpMultiGhost) return;
+      const ghost = document.createElement("canvas");
+      ghost.width = w;
+      ghost.height = h;
+      ghost.getContext("2d").drawImage(timeWarpCanvas, 0, 0, w, h);
+      timeWarpGhostBuffers.unshift(ghost);
+      while (timeWarpGhostBuffers.length > timeWarpGhostCount) timeWarpGhostBuffers.pop();
+    }
+
+    function timeWarpCaptureSlice(w, h, progress) {
+      const from = Math.max(0, Math.min(1, timeWarpLastProgress));
+      const to = Math.max(0, Math.min(1, progress));
+      const a = Math.min(from, to);
+      const b = Math.max(from, to);
+      const pad = Math.max(1, timeWarpBarThickness);
+      if (timeWarpDirection === "top-bottom" || timeWarpDirection === "bottom-top") {
+        const y0 = Math.max(0, Math.floor(a * h) - pad);
+        const y1 = Math.min(h, Math.ceil(b * h) + pad);
+        if (y1 > y0) timeWarpCtx.drawImage(timeWarpSourceCanvas, 0, y0, w, y1 - y0, 0, y0, w, y1 - y0);
+      } else {
+        const x0 = Math.max(0, Math.floor(a * w) - pad);
+        const x1 = Math.min(w, Math.ceil(b * w) + pad);
+        if (x1 > x0) timeWarpCtx.drawImage(timeWarpSourceCanvas, x0, 0, x1 - x0, h, x0, 0, x1 - x0, h);
+      }
+      timeWarpLastProgress = progress;
+    }
+
+    function timeWarpDrawLayer(w, h) {
+      ctx.save();
+      ctx.globalAlpha = timeWarpOpacity;
+      ctx.globalCompositeOperation = timeWarpBlendMode;
+      if (timeWarpMultiGhost) {
+        timeWarpGhostBuffers.forEach((ghost, index) => {
+          ctx.globalAlpha = timeWarpOpacity * Math.pow(0.58, index + 1);
+          ctx.drawImage(ghost, 0, 0, w, h);
+        });
+      }
+      if (timeWarpTrail) {
+        ctx.globalAlpha = timeWarpOpacity * 0.75;
+        ctx.drawImage(timeWarpTrailCanvas, 0, 0, w, h);
+      }
+      ctx.globalAlpha = timeWarpOpacity;
+      ctx.drawImage(timeWarpCanvas, 0, 0, w, h);
+      ctx.restore();
+    }
+
+    function timeWarpDrawScanBar(w, h, progress) {
+      if (!timeWarpShowBar || timeWarpCompleted) return;
+      ctx.save();
+      ctx.strokeStyle = timeWarpBarColor;
+      ctx.lineWidth = timeWarpBarThickness;
+      ctx.shadowColor = timeWarpGlow ? timeWarpBarColor : "transparent";
+      ctx.shadowBlur = timeWarpGlow ? 18 : 0;
+      ctx.beginPath();
+      if (timeWarpDirection === "top-bottom" || timeWarpDirection === "bottom-top") {
+        const y = progress * h;
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+      } else {
+        const x = progress * w;
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function timeWarpRender(w, h, now) {
+      if (!activeFx.has("timewarp")) return;
+      timeWarpEnsureBuffers(w, h);
+      timeWarpSourceCtx.setTransform(1, 0, 0, 1, 0, 0);
+      timeWarpSourceCtx.clearRect(0, 0, w, h);
+      timeWarpSourceCtx.drawImage(canvas, 0, 0, w, h);
+
+      let progress = timeWarpLastProgress;
+      if (timeWarpRunning && !timeWarpFrozen) {
+        const scanMs = Math.max(0.5, timeWarpGetScanTime()) * 1000;
+        progress = Math.min(1, (now - timeWarpScanStart) / scanMs);
+        if (timeWarpDirection === "bottom-top" || timeWarpDirection === "right-left") progress = 1 - progress;
+        timeWarpCaptureSlice(w, h, progress);
+        const rawProgress = Math.min(1, (now - timeWarpScanStart) / scanMs);
+        if (rawProgress >= 1 && !timeWarpCompleted) {
+          timeWarpCompleted = true;
+          timeWarpRunning = false;
+          timeWarpCompletedAt = now;
+          timeWarpStoreGhost(w, h);
+        }
+      }
+
+      if (timeWarpTrail) {
+        timeWarpTrailCtx.save();
+        timeWarpTrailCtx.globalCompositeOperation = "destination-out";
+        timeWarpTrailCtx.fillStyle = `rgba(0,0,0,${1 - timeWarpTrailDecay})`;
+        timeWarpTrailCtx.fillRect(0, 0, w, h);
+        timeWarpTrailCtx.globalCompositeOperation = "source-over";
+        timeWarpTrailCtx.drawImage(timeWarpCanvas, 0, 0, w, h);
+        timeWarpTrailCtx.restore();
+      }
+
+      if (timeWarpDisplayMode === "warp-only") {
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(timeWarpSourceCanvas, 0, 0, w, h);
+      }
+      timeWarpDrawLayer(w, h);
+      timeWarpDrawScanBar(w, h, progress);
+
+      if (timeWarpCompleted && timeWarpAfterScan === "auto-reset" && now - timeWarpCompletedAt > 1200) timeWarpReset(false);
+      if (timeWarpCompleted && timeWarpAfterScan === "loop") {
+        if (timeWarpPingPong) timeWarpReverseDirection();
+        timeWarpStartScan();
+      }
+    }
+
     function applyFx(w, h) {
       if (activeFx.size === 0) return;
 
@@ -1939,6 +2245,7 @@
       drawBase(w, h);
       drawAvatar(w, h);
       applyFx(w, h);
+      timeWarpRender(w, h, performance.now());
       updateFaceMaskSystem(w, h, performance.now());
       drawFaceMasks(ctx, performance.now());
       updateGestureHandSystem(w, h, performance.now());
@@ -2034,6 +2341,12 @@
   </script>
 </body>
 </html>
+
+
+
+
+
+
 
 
 
